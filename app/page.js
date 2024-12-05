@@ -10,6 +10,7 @@ import Timings from "./_components/Timings";
 import dynamic from 'next/dynamic';
 import Campaign from './_components/campaign'
 import Gallery from './_components/Gallery'
+import DoctorLogin from "./_components/doctorLogin"; // Correct path for DoctorLogin
 
 // Dynamically import MapComponent with server-side rendering disabled
 const MapComponent = dynamic(() => import('./_components/map'), { ssr: false });
@@ -28,7 +29,11 @@ useEffect(()=>{
   }
   return (
     <>
+    <div>
+    <DoctorLogin/>
+    </div>
       <div>
+        
         <Hero/>
         <CategorySearch/>
         <DoctorList doctorList={doctorList}/>

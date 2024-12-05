@@ -3,11 +3,11 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button } from "../../components/ui/button";
 import { LoginLink, LogoutLink, useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { AiOutlineArrowRight, AiOutlineArrowLeft } from "react-icons/ai";
-import GlobalApi from "@/app/_utils/GlobalApi";
+import GlobalApi from "../../app/_utils/GlobalApi";
 
 function Header() {
   const [campaigns, setCampaigns] = useState([]);

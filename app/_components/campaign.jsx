@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AiOutlineArrowRight, AiOutlineArrowLeft } from "react-icons/ai";
-import GlobalApi from "@/app/_utils/GlobalApi";
+import GlobalApi from "../../app/_utils/GlobalApi";
 
 function CampaignSection() {
   const [campaigns, setCampaigns] = useState([]);
