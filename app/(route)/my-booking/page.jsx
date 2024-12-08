@@ -4,9 +4,9 @@
 import React, { useState, useEffect } from 'react'; // Include useEffect
 import {useKindeBrowserClient} from '@kinde-oss/kinde-auth-nextjs'; // Make sure this import is'@kinde-oss/kinde-auth-nextjs' correct
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import BookingList from './_components/BookingList'
-import GlobalApi  from '@/app/_utils/GlobalApi';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "/components/ui/tabs.jsx"
+import BookingList from '/app/(route)/my-booking/_components/BookingList.jsx'
+import GlobalApi  from '/app/_utils/GlobalApi.jsx';
 
 function MyBooking(){
     const {user}=useKindeBrowserClient();

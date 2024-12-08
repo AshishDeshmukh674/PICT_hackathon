@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import GlobalApi from '@/app/_utils/GlobalApi';
-import DoctorDetail from './_components/DoctorDetail';
+import GlobalApi from '/app/_utils/GlobalApi.jsx';
+import DoctorDetail from '/app/(route)/details/[recordId]/_components/DoctorDetail.jsx';
 
 function Details({ params }) {
   const [doctor, setDoctor] = useState(null);

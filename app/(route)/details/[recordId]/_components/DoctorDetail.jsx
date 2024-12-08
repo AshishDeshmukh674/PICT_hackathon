@@ -2,7 +2,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { GraduationCap, MapPin } from 'lucide-react';
-import BookAppointment from './BookAppointment'; // Import the BookAppointment component
+import BookAppointment from '/app/(route)/details/[recordId]/_components/BookAppointment.jsx'; // Import the BookAppointment component
 
 function DoctorDetail({ doctor }) {
     const socialMediaList = [

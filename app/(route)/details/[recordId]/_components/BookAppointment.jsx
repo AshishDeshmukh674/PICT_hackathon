@@ -9,12 +9,12 @@ import {
     DialogTrigger,
     DialogFooter,
     DialogClose,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
+} from "/components/ui/dialog";
+import { Button } from "/components/ui/button.jsx";
+import { Calendar } from "/components/ui/calendar.jsx";
 import { CalendarDays, Clock } from 'lucide-react';
 import { useKindeBrowserClient } from '@kinde-oss/kinde-auth-nextjs';
-import GlobalApi from '@/app/_utils/GlobalApi';
+import GlobalApi from '/app/_utils/GlobalApi.jsx';
 import { useRouter } from 'next/navigation';
 import axios from 'axios'; // Make sure to import axios
 

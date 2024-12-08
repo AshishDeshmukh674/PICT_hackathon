@@ -2,9 +2,9 @@
 import React, { useState } from 'react';
 import Image from 'next/image'; // For handling images in Next.js
 import { MapPin, Calendar, Clock } from 'lucide-react'; // For icons
-import { Button } from "@/components/ui/button"; // Assuming you have a custom Button component
+import { Button } from "/components/ui/button.jsx"; // Assuming you have a custom Button component
 import moment from 'moment'; // For date formatting
-import GlobalApi from '@/app/_utils/GlobalApi';
+import GlobalApi from '/app/_utils/GlobalApi.jsx';
 import { useRouter } from 'next/navigation'; // Import useRouter
 
 function BookingList({ bookingList, expired }) {
