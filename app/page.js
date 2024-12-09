@@ -29,9 +29,9 @@ useEffect(()=>{
   }
   return (
     <>
-    <div>
+    {/* <div>
     <DoctorLogin/>
-    </div>
+    </div> */}
       <div>
         
         <Hero/>
