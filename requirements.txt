@@ -1,0 +1,13 @@
+# Import necessary libraries before npm install
+npm install @types/react@19.0.1
+
+# Then perform
+npm install
+
+# Then install necessary libraries
+npm install groq-sdk
+npm install framer-motion
+
+npm install @radix-ui/react-slot
+npm install @radix-ui/react-scroll-area
+npm install @radix-ui/react-avatar

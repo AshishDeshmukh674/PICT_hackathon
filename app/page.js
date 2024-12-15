@@ -11,6 +11,7 @@ import dynamic from 'next/dynamic';
 import Campaign from './_components/campaign'
 import Gallery from './_components/Gallery'
 import DoctorLogin from "./_components/doctorLogin"; // Correct path for DoctorLogin
+import Chatbot from "./chat/page"
 
 // Dynamically import MapComponent with server-side rendering disabled
 const MapComponent = dynamic(() => import('./_components/map'), { ssr: false });
@@ -55,6 +56,9 @@ useEffect(()=>{
       </div>
       <div id="map-container" className="map-container">
           <MapComponent />
+      </div>
+      <div>
+        <Chatbot/>
       </div>
     </>
   );
