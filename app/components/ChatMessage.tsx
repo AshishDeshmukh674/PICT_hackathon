@@ -1,7 +1,7 @@
 import { motion } from "framer-motion"
 import { User, Bot } from 'lucide-react'
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { cn } from "@/lib/utils"
+import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar"
+import { cn } from "../../lib/utils"
 
 interface ChatMessageProps {
   role: "user" | "assistant" | "system"
