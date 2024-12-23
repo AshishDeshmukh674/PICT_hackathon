@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "target": "es2017",
     "lib": [
       "dom",
       "dom.iterable",
@@ -10,8 +11,8 @@
     "strict": false,
     "noEmit": true,
     "incremental": true,
-    "module": "esnext",
     "esModuleInterop": true,
+    "module": "esnext",
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
@@ -27,7 +28,7 @@
     ".next/types/**/*.ts",
     "**/*.ts",
     "**/*.tsx"
-, "app/api/chat/route.js", "app/components/ChatHeader.jsx", "app/components/ChatMessage.jsx", "app/components/theme-provider.jsx", "app/components/TypingAnimation.jsx", "app/chat/page.jsx"  ],
+  ],
   "exclude": [
     "node_modules"
   ]
