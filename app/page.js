@@ -54,9 +54,9 @@ useEffect(()=>{
           <Timings />
       </div>
       </div>
-      <div id="map-container" className="map-container">
+      {/* <div id="map-container" className="map-container">
           <MapComponent />
-      </div>
+      </div> */}
       <div>
         <Chatbot/>
       </div>
