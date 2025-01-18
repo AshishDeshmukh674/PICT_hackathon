@@ -7,6 +7,7 @@ import { Textarea } from "../../components/ui/textarea";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { ChatMessage } from "./ChatMessage";
 import GlobalApi from "../_utils/GlobalApi";
+import axios from 'axios';
 
 function ChatHeader({ onClose }) {
   return (
@@ -129,6 +130,59 @@ const getAvailableTimeSlots = async (doctorId, date, clinicType) => {
   } catch (error) {
     console.error("Error getting available time slots:", error);
     return [];
+  }
+};
+
+const sendMessage = async (formData) => {
+  const phoneNumbers = [
+    "+918149623527",
+    // "+919822038877",
+    // "+919764432460",
+  ];
+
+  try {
+    const promises = phoneNumbers.map(async (number) => {
+      const response = await axios.post(
+        `https://graph.facebook.com/v16.0/405802159279444/messages`,
+        {
+          messaging_product: "whatsapp",
+          to: number,
+          type: "template",
+          template: {
+            name: "booking_appointment",
+            language: { code: "en" },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  { type: "text", text: formData.user_name },  // {{1}}
+                  { type: "text", text: formData.user_phone },  // {{2}}
+                  { type: "text", text: formData.date },  // {{3}}
+                  { type: "text", text: formData.time },  // {{4}}
+                  { type: "text", text: formData.doctorName }  // {{5}}
+                ]
+              }
+            ]
+          }
+        },
+        {
+          headers: {
+            "Authorization": `Bearer EAAE2eCrRWPkBO5IJD2ZCjepnBu16tfITg1aSWXeVuoqMEXWLE0ME2JZAKRNQUeE5T19rKzPltkk5PNuxSfwqnxzRWJtJuoCAqBTJxTANQW7hRnlHvYokTVPVjPccghhJVCBCiKZBlUKAUvnzJmuftZCOesX5uNVIJ94YvaZBBEwKWfFt9BQ1qDjlfZAQ4C7uPZBDQZDZD`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      if (response.status !== 200) {
+        throw new Error(`Failed to send message to ${number}: ${response.data.error.message}`);
+      }
+    });
+
+    await Promise.all(promises);
+    return "Your message has been sent successfully to all recipients.";
+  } catch (error) {
+    console.error(`Failed to send message: ${error.message}`);
+    throw new Error(`Failed to send message: ${error.message}`);
   }
 };
 
@@ -394,15 +448,33 @@ Please enter the number (1-3) for your choice.`;
               doctor: bookingData.doctorId
             }
           };
-          console.log(appointmentData);
 
           try {
+            // Book the appointment
             await GlobalApi.bookAppointment(appointmentData);
-            const confirmationMsg = "Your appointment has been successfully booked! You will receive a confirmation email shortly.";
+
+            // Get doctor details for the message
+            const doctorResponse = await GlobalApi.getDoctorById(bookingData.doctorId);
+            const doctorName = doctorResponse.data.data.attributes.Name;
+
+            // Prepare form data for the WhatsApp message
+            const formData = {
+              user_name: bookingData.name,
+              user_phone: bookingData.phone,
+              date: new Date(bookingData.date).toLocaleDateString('en-GB'), // Convert to DD/MM/YYYY format
+              time: selectedTime,
+              doctorName: doctorName
+            };
+
+            // Send WhatsApp message
+            await sendMessage(formData);
+
+            const confirmationMsg = "Your appointment has been successfully booked! You will receive a confirmation message shortly.";
             speak(confirmationMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: confirmationMsg }]);
             setBookingStep(0); // Reset booking flow
           } catch (error) {
+            console.error("Booking failed:", error);
             const errorMsg = "Sorry, there was an error booking your appointment. Please try again.";
             speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
