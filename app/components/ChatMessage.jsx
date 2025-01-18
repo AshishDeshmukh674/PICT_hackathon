@@ -52,3 +52,12 @@ export function ChatMessage({ role, content }) {
     </motion.div>
   );
 }
+
+
+
+
+
+
+
+
+

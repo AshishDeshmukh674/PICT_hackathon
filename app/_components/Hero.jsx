@@ -11,7 +11,7 @@ function Hero() {
   const slides = [
     {
       id: 3,
-      image: '/doctors.jpeg',
+      image: '/advice.png',
       title: ['Dr. Shreepad Bhat',
         'MBBS MD Medicine (B.J.Medical College Pune)'
       ],
@@ -30,7 +30,7 @@ function Hero() {
     },
     {
       id: 4,
-      image: '/Shilpa Bhat.jpg',
+      image: '/advice.png',
       title: ['Dr. Shilpa Bhat',
         'MBBS, MD (Obstetrics & Gynaecology)'
       ],

@@ -11,3 +11,5 @@ npm install framer-motion
 npm install @radix-ui/react-slot
 npm install @radix-ui/react-scroll-area
 npm install @radix-ui/react-avatar
+npm install tesseract.js@^4.1.1 pdfjs-dist@3.11.174 react-dropzone@14.2.3 @radix-ui/react-avatar lucide-react framer-motion
+npm install pdfjs-dist@3.11.174 tesseract.js react-dropzone

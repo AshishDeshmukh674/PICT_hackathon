@@ -16,7 +16,7 @@ import { CalendarDays, Clock } from 'lucide-react';
 import { useKindeBrowserClient } from '@kinde-oss/kinde-auth-nextjs';
 import GlobalApi from '/app/_utils/GlobalApi.jsx';
 import { useRouter } from 'next/navigation';
-import axios from 'axios'; // Make sure to import axios
+import axios from 'axios';
 
 function BookAppointment({ doctor }) {
     const [date, setDate] = useState(new Date());
@@ -221,6 +221,7 @@ function BookAppointment({ doctor }) {
             };
     
             // Save the appointment
+            console.log("book appoinemtnt data:",data);
             await GlobalApi.bookAppointment(data);
     
             // Prepare form data for the message
@@ -249,8 +250,8 @@ function BookAppointment({ doctor }) {
     const sendMessage = async (formData) => {
         const phoneNumbers = [
             "+918149623527",
-            "+919822038877",
-            "+919764432460",
+            // "+919822038877",
+            // "+919764432460",
         ];
     
         try {
