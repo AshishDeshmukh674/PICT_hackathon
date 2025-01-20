@@ -23,15 +23,6 @@ const ShareModal = ({ event, onClose }) => {
           );
           break;
 
-        case "twitter":
-          window.open(
-            `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-              fullShareText
-            )}`,
-            "_blank"
-          );
-          break;
-
         case "email":
           window.open(
             `mailto:?subject=${encodeURIComponent(
@@ -39,11 +30,6 @@ const ShareModal = ({ event, onClose }) => {
             )}&body=${encodeURIComponent(fullShareText)}`,
             "_blank"
           );
-          break;
-
-        case "copy":
-          await navigator.clipboard.writeText(fullShareText);
-          toast.success("Meeting details copied to clipboard!");
           break;
 
         default:
@@ -54,8 +40,7 @@ const ShareModal = ({ event, onClose }) => {
               url: meetingUrl,
             });
           } else {
-            await navigator.clipboard.writeText(fullShareText);
-            toast.success("Meeting details copied to clipboard!");
+            toast.error("Sharing not supported on this device");
           }
       }
     } catch (error) {
@@ -89,25 +74,9 @@ const ShareModal = ({ event, onClose }) => {
           <Button
             variant="outline"
             className="w-full justify-center"
-            onClick={() => handleShare("twitter")}
-          >
-            Share on Twitter
-          </Button>
-
-          <Button
-            variant="outline"
-            className="w-full justify-center"
             onClick={() => handleShare("email")}
           >
             Share via Email
-          </Button>
-
-          <Button
-            variant="outline"
-            className="w-full justify-center"
-            onClick={() => handleShare("copy")}
-          >
-            Copy to Clipboard
           </Button>
         </div>
       </div>

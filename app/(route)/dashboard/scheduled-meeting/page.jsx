@@ -11,7 +11,6 @@ import {
 } from "firebase/firestore";
 import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
 import { app } from "../../../config/FirebaseConfig";
-import { format } from "date-fns";
 import { Settings, Clock, Video, Link2 } from "lucide-react";
 
 function ScheduledMeeting() {
