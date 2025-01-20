@@ -8,6 +8,7 @@ import { ScrollArea } from "../../components/ui/scroll-area";
 import { ChatMessage } from "./ChatMessage";
 import GlobalApi from "../_utils/GlobalApi";
 import axios from 'axios';
+import { FileUploadHandler } from "./FileUploadHandler";
 
 function ChatHeader({ onClose }) {
   return (
@@ -500,6 +501,38 @@ Please enter the number (1-3) for your choice.`;
     setIsRecording(!isRecording);
   };
 
+  const handleExtractedText = async (text) => {
+    if (!text.trim()) return;
+    
+    setIsLoading(true);
+    setChatHistory(prev => [...prev, { role: "user", content: text }]);
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          chatHistory: [...chatHistory, { role: "user", content: text }]
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to get response from server");
+
+      const data = await response.json();
+      const assistantResponse = data.response;
+      
+      speak(assistantResponse);
+      setChatHistory(prev => [...prev, { role: "assistant", content: assistantResponse }]);
+    } catch (error) {
+      console.error(error);
+      const errorMsg = "Sorry, there was an error processing your request.";
+      speak(errorMsg);
+      setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -515,6 +548,9 @@ Please enter the number (1-3) for your choice.`;
               <ChatMessage key={idx} role={msg.role} content={msg.content} />
             ))}
             {isLoading && <TypingAnimation />}
+            <div className="mt-4">
+              <FileUploadHandler onExtractedText={handleExtractedText} />
+            </div>
           </ScrollArea>
           <div className="p-4 border-t border-gray-200">
             <div className="flex gap-2">
