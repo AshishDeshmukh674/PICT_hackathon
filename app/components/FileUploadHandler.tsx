@@ -15,7 +15,7 @@ export function FileUploadHandler({ onExtractedText }: FileUploadHandlerProps) {
   // Initialize PDF.js worker
   useEffect(() => {
     const setupPdfWorker = async () => {
-      const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+      const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.min.js');
       pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker.default;
     };
     setupPdfWorker().catch(console.error);

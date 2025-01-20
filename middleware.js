@@ -7,12 +7,12 @@ export async function middleware(request) {
     const { isAuthenticated } = getKindeServerSession();
     if (!(await isAuthenticated())) {
         // redirect("/api/auth/login");
-        return NextResponse.redirect(new URL('/api/auth/login?post_login_redirect_url=/', request.url))
+        return NextResponse.redirect(new URL('/api/auth/login?post_login_redirect_url=/dashboard', request.url))
 
       }
 }
  
 // See "Matching Paths" below to learn more
 export const config = {
-  matcher: '/details/:path*',
+  matcher: ['/dashboard/:path*','/create-business'],
 }
