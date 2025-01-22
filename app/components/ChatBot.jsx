@@ -10,6 +10,13 @@ import GlobalApi from "../_utils/GlobalApi";
 import axios from 'axios';
 import { FileUploadHandler } from "./FileUploadHandler";
 
+const LANGUAGE_OPTIONS = {
+  en: "English",
+  hi: "Hindi",
+  mr: "Marathi",
+  gu: "Gujarati"
+};
+
 function ChatHeader({ onClose }) {
   return (
     <div className="flex justify-between items-center p-4 border-b border-border">
@@ -213,6 +220,7 @@ export default function ChatBot({ isOpen, onClose }) {
   const chatContainerRef = useRef(null);
   const [clinicType, setClinicType] = useState('Morning Clinic - Ratnamukund Clinic, Warje');
   const [availableTimeSlots, setAvailableTimeSlots] = useState([]);
+  const [selectedLanguage, setSelectedLanguage] = useState("en");
 
   useEffect(() => {
     if (!("webkitSpeechRecognition" in window)) {
@@ -257,26 +265,27 @@ export default function ChatBot({ isOpen, onClose }) {
     setChatHistory(prev => [...prev, { role: "user", content: input }]);
 
     try {
-      // First, check if it's a booking-related query
       if (bookingStep > 0 || input.toLowerCase().includes("book") || input.toLowerCase().includes("appointment")) {
+        // Keep booking flow in English
         await handleBookingFlow(input);
       } else {
-        // Otherwise, use Groq for general medical queries
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
-            chatHistory: [...chatHistory, { role: "user", content: input }]
+            chatHistory: [...chatHistory, { role: "user", content: input }],
+            language: selectedLanguage // Pass selected language to API
           }),
         });
 
         if (!response.ok) throw new Error("Failed to get response from server");
 
         const data = await response.json();
-        const assistantResponse = data.response;
-        
-        speak(assistantResponse);
-        setChatHistory(prev => [...prev, { role: "assistant", content: assistantResponse }]);
+        speak(data.response);
+        setChatHistory(prev => [...prev, { 
+          role: "assistant", 
+          content: data.response
+        }]);
       }
     } catch (error) {
       console.error(error);
@@ -553,6 +562,19 @@ Please enter the number (1-3) for your choice.`;
             </div>
           </ScrollArea>
           <div className="p-4 border-t border-gray-200">
+            <div className="flex justify-end mb-2">
+              <select 
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+                className="p-2 border rounded-md text-sm"
+              >
+                {Object.entries(LANGUAGE_OPTIONS).map(([code, name]) => (
+                  <option key={code} value={code}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="flex gap-2">
               <Textarea
                 value={userInput}
