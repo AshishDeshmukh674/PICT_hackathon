@@ -105,3 +105,11 @@ export function FileUploadHandler({ onExtractedText }: FileUploadHandlerProps) {
     </div>
   );
 }
+
+
+
+
+
+
+
+
