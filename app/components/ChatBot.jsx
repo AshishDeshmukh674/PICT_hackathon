@@ -17,6 +17,105 @@ const LANGUAGE_OPTIONS = {
   gu: "Gujarati"
 };
 
+const TRANSLATIONS = {
+  en: {
+    welcome: "Hello! I'm your medical assistant. How can I help you today? You can book an appointment or ask me health-related questions.",
+    provideName: "Please provide your name.",
+    provideEmail: "Thank you. Now please provide your email address.",
+    providePhone: "Please provide your phone number.",
+    chooseDoctorPrompt: "Here are the available doctors:\n{doctorList}\nPlease choose a doctor by saying their ID number.",
+    invalidDoctorId: "Please provide a valid doctor ID number.",
+    provideDate: "Please provide your preferred appointment date in DD/MM/YYYY format.",
+    invalidDateFormat: "Please provide the date in DD/MM/YYYY format.",
+    futureDateRequired: "Please select a future date.",
+    closedSunday: "Sorry, we are closed on Sundays. Please select another date.",
+    chooseClinic: `Please choose a clinic type:
+1. Morning Clinic - Ratnamukund Clinic, Warje
+2. Evening Clinic - Ratnamukund Clinic, Warje
+3. AfterNoon Clinic - Shashwat Clinic, Pune
+Please enter the number (1-3) for your choice.`,
+    invalidClinic: "Please select a valid clinic type (1-3).",
+    noTimeSlots: "No available time slots for the selected date and clinic type. Would you like to try another clinic type? (yes/no)",
+    availableSlots: "Available time slots are:\n{slots}\nPlease choose a time slot.",
+    invalidTimeSlot: "Please select a valid time slot from the list provided.",
+    bookingSuccess: "Your appointment has been successfully booked! You will receive a confirmation message shortly.",
+    bookingError: "Sorry, there was an error booking your appointment. Please try again.",
+    processingError: "Sorry, there was an error processing your booking request. Please try again."
+  },
+  hi: {
+    welcome: "नमस्ते! मैं आपका मेडिकल असिस्टेंट हूं। मैं आपकी कैसे मदद कर सकता हूं? आप अपॉइंटमेंट बुक कर सकते हैं या स्वास्थ्य संबंधी प्रश्न पूछ सकते हैं।",
+    provideName: "कृपया अपना नाम बताएं।",
+    provideEmail: "धन्यवाद। अब कृपया अपना ईमेल पता प्रदान करें।",
+    providePhone: "कृपया अपना फोन नंबर प्रदान करें।",
+    chooseDoctorPrompt: "उपलब्ध डॉक्टर यहां हैं:\n{doctorList}\nकृपया उनका ID नंबर बोलकर डॉक्टर चुनें।",
+    invalidDoctorId: "कृपया एक वैध डॉक्टर ID नंबर प्रदान करें।",
+    provideDate: "कृपया DD/MM/YYYY प्रारूप में अपनी पसंदीदा अपॉइंटमेंट तिथि प्रदान करें।",
+    invalidDateFormat: "कृपया तिथि DD/MM/YYYY प्रारूप में प्रदान करें।",
+    futureDateRequired: "कृपया भविष्य की तिथि चुनें।",
+    closedSunday: "क्षमा करें, हम रविवार को बंद हैं। कृपया कोई अन्य तिथि चुनें।",
+    chooseClinic: `कृपया क्लिनिक का प्रकार चुनें:
+1. सुबह का क्लिनिक - रत्नमुकुंद क्लिनिक, वारजे
+2. शाम का क्लिनिक - रत्नमुकुंद क्लिनिक, वारजे
+3. दोपहर का क्लिनिक - शाश्वत क्लिनिक, पुणे
+कृपया अपनी पसंद के लिए नंबर (1-3) दर्ज करें।`,
+    invalidClinic: "कृपया वैध क्लिनिक प्रकार (1-3) चुनें।",
+    noTimeSlots: "चयनित तिथि और क्लिनिक प्रकार के लिए कोई समय स्लॉट उपलब्ध नहीं है। क्या आप दूसरा क्लिनिक प्रकार आज़माना चाहेंगे? (हां/नहीं)",
+    availableSlots: "उपलब्ध समय स्लॉट हैं:\n{slots}\nकृपया एक समय स्लॉट चुनें।",
+    invalidTimeSlot: "कृपया दी गई सूची से एक वैध समय स्लॉट चुनें।",
+    bookingSuccess: "आपका अपॉइंटमेंट सफलतापूर्वक बुक कर लिया गया है! आपको जल्द ही एक पुष्टिकरण संदेश प्राप्त होगा।",
+    bookingError: "क्षमा करें, आपका अपॉइंटमेंट बुक करने में एक त्रुटि हुई। कृपया पुनः प्रयास करें।",
+    processingError: "क्षमा करें, आपके बुकिंग अनुरोध को संसाधित करने में एक त्रुटि हुई। कृपया पुनः प्रयास करें।"
+  },
+  mr: {
+    welcome: "नमस्कार! मी तुमचा मेडिकल असिस्टंट आहे. मी तुम्हाला कशी मदत करू शकतो? तुम्ही अपॉइंटमेंट बुक करू शकता किंवा आरोग्याशी संबंधित प्रश्न विचारू शकता.",
+    provideName: "कृपया तुमचे नाव सांगा.",
+    provideEmail: "धन्यवाद. आता कृपया तुमचा ईमेल पत्ता द्या.",
+    providePhone: "कृपया तुमचा फोन नंबर द्या.",
+    // ... Add other Marathi translations
+  },
+  gu: {
+    welcome: "નમસ્તે! હું તમારો મેડિકલ આસિસ્ટન્ટ છું. હું તમને કેવી રીતે મદદ કરી શકું? તમે એપોઇન્ટમેન્ટ બુક કરી શકો છો અથવા આરોગ્ય સંબંધિત પ્રશ્નો પૂછી શકો છો.",
+    provideName: "કૃપા કરીને તમારું નામ આપો.",
+    provideEmail: "આભાર. હવે કૃપા કરીને તમારું ઈમેઈલ સરનામું આપો.",
+    providePhone: "કૃપા કરીને તમારો ફોન નંબર આપો.",
+    // ... Add other Gujarati translations
+  }
+};
+
+const NUMBER_WORDS = {
+  hi: {
+    'एक': '1', 'दो': '2', 'तीन': '3', 'चार': '4', 'पांच': '5',
+    'छह': '6', 'सात': '7', 'आठ': '8', 'नौ': '9', 'दस': '10'
+  },
+  mr: {
+    'एक': '1', 'दोन': '2', 'तीन': '3', 'चार': '4', 'पाच': '5',
+    'सहा': '6', 'सात': '7', 'आठ': '8', 'नऊ': '9', 'दहा': '10'
+  },
+  gu: {
+    'એક': '1', 'બે': '2', 'ત્રણ': '3', 'ચાર': '4', 'પાંચ': '5',
+    'છ': '6', 'સાત': '7', 'આઠ': '8', 'નવ': '9', 'દસ': '10'
+  },
+  en: {
+    'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5',
+    'six': '6', 'seven': '7', 'eight': '8', 'nine': '9', 'ten': '10'
+  }
+};
+
+const convertNumberWordsToDigits = (input, language) => {
+  if (!input) return input;
+  
+  let processedInput = input.toLowerCase();
+  const numberMap = NUMBER_WORDS[language] || NUMBER_WORDS.en;
+  
+  // Replace number words with digits
+  Object.entries(numberMap).forEach(([word, digit]) => {
+    const regex = new RegExp(`\\b${word}\\b`, 'gi');
+    processedInput = processedInput.replace(regex, digit);
+  });
+  
+  return processedInput;
+};
+
 function ChatHeader({ onClose }) {
   return (
     <div className="flex justify-between items-center p-4 border-b border-border">
@@ -197,10 +296,7 @@ const sendMessage = async (formData) => {
 export default function ChatBot({ isOpen, onClose }) {
   const [userInput, setUserInput] = useState("");
   const [chatHistory, setChatHistory] = useState([
-    { 
-      role: "assistant", 
-      content: "Hello! I'm your medical assistant. How can I help you today? You can book an appointment or ask me health-related questions." 
-    }
+    { role: "assistant", content: TRANSLATIONS.en.welcome }
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -216,11 +312,143 @@ export default function ChatBot({ isOpen, onClose }) {
   });
   const [availableDoctors, setAvailableDoctors] = useState([]);
   const [availableSlots, setAvailableSlots] = useState([]);
-  const recognitionRef = useRef(null);
-  const chatContainerRef = useRef(null);
   const [clinicType, setClinicType] = useState('Morning Clinic - Ratnamukund Clinic, Warje');
   const [availableTimeSlots, setAvailableTimeSlots] = useState([]);
   const [selectedLanguage, setSelectedLanguage] = useState("en");
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const recognitionRef = useRef(null);
+
+  const forceLoadVoices = () => {
+    return new Promise((resolve) => {
+      const voices = speechSynthesis.getVoices();
+      if (voices.length) {
+        resolve(voices);
+        return;
+      }
+      
+      speechSynthesis.onvoiceschanged = () => {
+        resolve(speechSynthesis.getVoices());
+      };
+    });
+  };
+
+  const speak = async (text) => {
+    if ("speechSynthesis" in window) {
+      try {
+        if (speechSynthesis.speaking) {
+          speechSynthesis.cancel();
+        }
+
+        const voices = await forceLoadVoices();
+        const utterance = new SpeechSynthesisUtterance(text);
+        
+        // Language configurations with fallbacks
+        const languageConfig = {
+          en: {
+            lang: "en-US",
+            fallbackLangs: ["en-GB", "en"],
+            preferredVoices: ["Google US English", "Microsoft David", "Alex"]
+          },
+          hi: {
+            lang: "hi-IN",
+            fallbackLangs: ["hi"],
+            preferredVoices: ["Google हिन्दी", "Microsoft Hemant"]
+          },
+          mr: {
+            lang: "mr-IN",
+            fallbackLangs: ["mr"],
+            preferredVoices: ["Google मराठी", "Microsoft Marathi"]
+          },
+          gu: {
+            lang: "gu-IN",
+            fallbackLangs: ["gu"],
+            preferredVoices: ["Google ગુજરાતી", "Microsoft Gujarati"]
+          }
+        };
+
+        const config = languageConfig[selectedLanguage] || languageConfig.en;
+        utterance.lang = config.lang;
+
+        // Find the best matching voice
+        let selectedVoice = null;
+
+        // Voice selection logic...
+        for (const preferredVoice of config.preferredVoices) {
+          selectedVoice = voices.find(voice => 
+            voice.name.includes(preferredVoice) || 
+            voice.voiceURI.includes(preferredVoice)
+          );
+          if (selectedVoice) break;
+        }
+
+        if (!selectedVoice) {
+          selectedVoice = voices.find(voice => voice.lang === config.lang);
+        }
+
+        if (!selectedVoice) {
+          for (const fallbackLang of config.fallbackLangs) {
+            selectedVoice = voices.find(voice => 
+              voice.lang.startsWith(fallbackLang)
+            );
+            if (selectedVoice) break;
+          }
+        }
+
+        if (!selectedVoice) {
+          const langCode = config.lang.split('-')[0];
+          selectedVoice = voices.find(voice => 
+            voice.lang.includes(langCode)
+          );
+        }
+
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
+          console.log(`Using voice: ${selectedVoice.name} (${selectedVoice.lang})`);
+        }
+
+        utterance.rate = selectedLanguage === 'en' ? 1 : 0.9;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = () => setIsSpeaking(false);
+        utterance.onerror = (event) => {
+          console.error('Speech synthesis error:', event);
+          setIsSpeaking(false);
+        };
+
+        speechSynthesis.speak(utterance);
+      } catch (error) {
+        console.error('Error in speak function:', error);
+        setIsSpeaking(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const loadAndLogVoices = async () => {
+      try {
+        const voices = await forceLoadVoices();
+        console.log('Available voices:', voices.map(voice => ({
+          name: voice.name,
+          lang: voice.lang,
+          voiceURI: voice.voiceURI,
+          default: voice.default,
+          localService: voice.localService
+        })));
+      } catch (error) {
+        console.error('Error loading voices:', error);
+      }
+    };
+
+    loadAndLogVoices();
+
+    return () => {
+      if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!("webkitSpeechRecognition" in window)) {
@@ -230,33 +458,71 @@ export default function ChatBot({ isOpen, onClose }) {
 
     const recognition = new webkitSpeechRecognition();
     recognition.continuous = false;
-    recognition.lang = "en-US";
+    recognition.lang = selectedLanguage === "en" ? "en-US" : 
+                      selectedLanguage === "hi" ? "hi-IN" : 
+                      selectedLanguage === "mr" ? "mr-IN" : 
+                      selectedLanguage === "gu" ? "gu-IN" : "en-US";
     recognition.interimResults = false;
 
-    recognition.onresult = (event) => {
+    let isProcessing = false;
+
+    recognition.onresult = async (event) => {
+      if (isProcessing) return;
+      isProcessing = true;
+      
       const transcript = event.results[0][0].transcript;
       setUserInput(transcript);
-      handleUserInput(transcript);
+      
+      try {
+        if (bookingStep > 0) {
+          await handleBookingFlow(transcript);
+        } else {
+          await handleUserInput(transcript);
+        }
+      } finally {
+        isProcessing = false;
+      }
     };
 
-    recognition.onerror = () => {
-      setError("Voice recognition failed. Please try again.");
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
+      if (event.error !== 'aborted') {
+        setError("Voice recognition failed. Please try again.");
+      }
       setIsRecording(false);
+      isProcessing = false;
     };
 
-    recognition.onend = () => setIsRecording(false);
+    recognition.onend = () => {
+      setIsRecording(false);
+      // Only restart if we're in booking flow and not processing
+      if (bookingStep > 0 && !isProcessing && !error) {
+        setTimeout(() => {
+          try {
+            if (!recognition.started) {
+              recognition.start();
+              setIsRecording(true);
+            }
+          } catch (error) {
+            console.error("Failed to restart recognition:", error);
+          }
+        }, 1000);
+      }
+    };
+
+    recognition.started = false;
+    recognition.onstart = () => {
+      recognition.started = true;
+    };
 
     recognitionRef.current = recognition;
-  }, []);
 
-  const speak = (text) => {
-    if ("speechSynthesis" in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "en-US";
-      utterance.rate = 1;
-      speechSynthesis.speak(utterance);
-    }
-  };
+    return () => {
+      if (recognition.started) {
+        recognition.stop();
+      }
+    };
+  }, [bookingStep, selectedLanguage]);
 
   const handleUserInput = async (input) => {
     if (!input.trim()) return;
@@ -265,23 +531,36 @@ export default function ChatBot({ isOpen, onClose }) {
     setChatHistory(prev => [...prev, { role: "user", content: input }]);
 
     try {
-      if (bookingStep > 0 || input.toLowerCase().includes("book") || input.toLowerCase().includes("appointment")) {
-        // Keep booking flow in English
+      // Check if we should start booking flow
+      if (input.toLowerCase().includes("book") || 
+          input.toLowerCase().includes("appointment") || 
+          input.toLowerCase().includes("अपॉइंटमेंट") || 
+          input.toLowerCase().includes("बुक")) {
+        setBookingStep(1);
+        const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
+        await speak(messages.provideName);
+        setChatHistory(prev => [...prev, { 
+          role: "assistant", 
+          content: messages.provideName 
+        }]);
+      } else if (bookingStep > 0) {
+        // If already in booking flow, continue with it
         await handleBookingFlow(input);
       } else {
+        // Normal chat flow
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
             chatHistory: [...chatHistory, { role: "user", content: input }],
-            language: selectedLanguage // Pass selected language to API
+            language: selectedLanguage
           }),
         });
 
         if (!response.ok) throw new Error("Failed to get response from server");
 
         const data = await response.json();
-        speak(data.response);
+        await speak(data.response);
         setChatHistory(prev => [...prev, { 
           role: "assistant", 
           content: data.response
@@ -290,7 +569,7 @@ export default function ChatBot({ isOpen, onClose }) {
     } catch (error) {
       console.error(error);
       const errorMsg = "Sorry, there was an error processing your request.";
-      speak(errorMsg);
+      await speak(errorMsg);
       setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
     } finally {
       setIsLoading(false);
@@ -299,29 +578,28 @@ export default function ChatBot({ isOpen, onClose }) {
   };
 
   const handleBookingFlow = async (input) => {
+    const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
+    
     try {
       switch(bookingStep) {
         case 0:
           setBookingStep(1);
-          const namePrompt = "Please provide your name.";
-          speak(namePrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: namePrompt }]);
+          await speak(messages.provideName);
+          setChatHistory(prev => [...prev, { role: "assistant", content: messages.provideName }]);
           break;
 
         case 1:
           setBookingData(prev => ({ ...prev, name: input }));
           setBookingStep(2);
-          const emailPrompt = "Thank you. Now please provide your email address.";
-          speak(emailPrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: emailPrompt }]);
+          await speak(messages.provideEmail);
+          setChatHistory(prev => [...prev, { role: "assistant", content: messages.provideEmail }]);
           break;
 
         case 2:
           setBookingData(prev => ({ ...prev, email: input }));
           setBookingStep(3);
-          const phonePrompt = "Please provide your phone number.";
-          speak(phonePrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: phonePrompt }]);
+          await speak(messages.providePhone);
+          setChatHistory(prev => [...prev, { role: "assistant", content: messages.providePhone }]);
           break;
 
         case 3:
@@ -331,24 +609,27 @@ export default function ChatBot({ isOpen, onClose }) {
           const doctorList = doctors.data.data.map(doc => 
             `Doctor ID: ${doc.id} - ${doc.attributes.Name}`
           ).join('\n');
-          const doctorPrompt = `Here are the available doctors:\n${doctorList}\nPlease choose a doctor by saying their ID number.`;
-          speak(doctorPrompt);
+          const doctorPrompt = messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
+          await speak(doctorPrompt);
           setChatHistory(prev => [...prev, { role: "assistant", content: doctorPrompt }]);
           setBookingStep(4);
           break;
 
         case 4:
-          const doctorId = parseInt(input);
-          if (isNaN(doctorId)) {
-            const errorMsg = "Please provide a valid doctor ID number.";
-            speak(errorMsg);
+          // Convert number words to digits before parsing
+          const processedInput = convertNumberWordsToDigits(input, selectedLanguage);
+          const doctorId = parseInt(processedInput);
+          
+          if (isNaN(doctorId) || !availableDoctors.some(doc => doc.id === doctorId)) {
+            const errorMsg = messages.invalidDoctorId;
+            await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
             break;
           }
           
           setBookingData(prev => ({ ...prev, doctorId }));
-          const datePrompt = "Please provide your preferred appointment date in DD/MM/YYYY format.";
-          speak(datePrompt);
+          const datePrompt = messages.provideDate;
+          await speak(datePrompt);
           setChatHistory(prev => [...prev, { role: "assistant", content: datePrompt }]);
           setBookingStep(5);
           break;
@@ -359,8 +640,8 @@ export default function ChatBot({ isOpen, onClose }) {
           const match = input.match(dateRegex);
           
           if (!match) {
-            const errorMsg = "Please provide the date in DD/MM/YYYY format.";
-            speak(errorMsg);
+            const errorMsg = messages.invalidDateFormat;
+            await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
             break;
           }
@@ -371,27 +652,23 @@ export default function ChatBot({ isOpen, onClose }) {
           today.setHours(0, 0, 0, 0);
 
           if (selectedDate < today) {
-            const errorMsg = "Please select a future date.";
-            speak(errorMsg);
+            const errorMsg = messages.futureDateRequired;
+            await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
             break;
           }
 
           if (selectedDate.getDay() === 0) {
-            const errorMsg = "Sorry, we are closed on Sundays. Please select another date.";
-            speak(errorMsg);
+            const errorMsg = messages.closedSunday;
+            await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
             break;
           }
 
           setBookingData(prev => ({ ...prev, date: selectedDate.toLocaleDateString('en-CA') }));
           
-          const clinicPrompt = `Please choose a clinic type:
-1. Morning Clinic - Ratnamukund Clinic, Warje
-2. Evening Clinic - Ratnamukund Clinic, Warje
-3. AfterNoon Clinic - Shashwat Clinic, Pune
-Please enter the number (1-3) for your choice.`;
-          speak(clinicPrompt);
+          const clinicPrompt = messages.chooseClinic;
+          await speak(clinicPrompt);
           setChatHistory(prev => [...prev, { role: "assistant", content: clinicPrompt }]);
           setBookingStep(6);
           break;
@@ -409,8 +686,8 @@ Please enter the number (1-3) for your choice.`;
               selectedClinic = 'AfterNoon Clinic - Shashwat Clinic, Pune';
               break;
             default:
-              const errorMsg = "Please select a valid clinic type (1-3).";
-              speak(errorMsg);
+              const errorMsg = messages.invalidClinic;
+              await speak(errorMsg);
               setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
               return;
           }
@@ -424,15 +701,15 @@ Please enter the number (1-3) for your choice.`;
           );
           
           if (slots.length === 0) {
-            const noSlotsMsg = "No available time slots for the selected date and clinic type. Would you like to try another clinic type? (yes/no)";
-            speak(noSlotsMsg);
+            const noSlotsMsg = messages.noTimeSlots;
+            await speak(noSlotsMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: noSlotsMsg }]);
             setBookingStep(6); // Stay on same step to allow retry
             break;
           }
 
-          const slotsPrompt = `Available time slots are:\n${slots.join('\n')}\nPlease choose a time slot.`;
-          speak(slotsPrompt);
+          const slotsPrompt = messages.availableSlots.replace('{slots}', slots.join('\n'));
+          await speak(slotsPrompt);
           setChatHistory(prev => [...prev, { role: "assistant", content: slotsPrompt }]);
           setAvailableTimeSlots(slots);
           setBookingStep(7);
@@ -441,8 +718,8 @@ Please enter the number (1-3) for your choice.`;
         case 7:
           const selectedTime = input.trim().toUpperCase();
           if (!availableTimeSlots.includes(selectedTime)) {
-            const errorMsg = "Please select a valid time slot from the list provided.";
-            speak(errorMsg);
+            const errorMsg = messages.invalidTimeSlot;
+            await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
             break;
           }
@@ -479,14 +756,14 @@ Please enter the number (1-3) for your choice.`;
             // Send WhatsApp message
             await sendMessage(formData);
 
-            const confirmationMsg = "Your appointment has been successfully booked! You will receive a confirmation message shortly.";
-            speak(confirmationMsg);
+            const confirmationMsg = messages.bookingSuccess;
+            await speak(confirmationMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: confirmationMsg }]);
             setBookingStep(0); // Reset booking flow
           } catch (error) {
             console.error("Booking failed:", error);
-            const errorMsg = "Sorry, there was an error booking your appointment. Please try again.";
-            speak(errorMsg);
+            const errorMsg = messages.bookingError;
+            await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
             setBookingStep(0);
           }
@@ -494,20 +771,33 @@ Please enter the number (1-3) for your choice.`;
       }
     } catch (error) {
       console.error(error);
-      const errorMsg = "Sorry, there was an error processing your booking request. Please try again.";
-      speak(errorMsg);
-      setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+      await speak(messages.processingError);
+      setChatHistory(prev => [...prev, { role: "assistant", content: messages.processingError }]);
       setBookingStep(0);
+    }
+  };
+
+  const startVoiceRecognition = () => {
+    if (recognitionRef.current && !recognitionRef.current.started) {
+      try {
+        recognitionRef.current.start();
+        setIsRecording(true);
+      } catch (error) {
+        console.error("Failed to start recognition:", error);
+        setError("Failed to start voice recognition. Please try again.");
+      }
     }
   };
 
   const toggleRecording = () => {
     if (isRecording) {
-      recognitionRef.current?.stop();
+      if (recognitionRef.current?.started) {
+        recognitionRef.current.stop();
+      }
+      setIsRecording(false);
     } else {
-      recognitionRef.current?.start();
+      startVoiceRecognition();
     }
-    setIsRecording(!isRecording);
   };
 
   const handleExtractedText = async (text) => {
@@ -530,17 +820,26 @@ Please enter the number (1-3) for your choice.`;
       const data = await response.json();
       const assistantResponse = data.response;
       
-      speak(assistantResponse);
+      await speak(assistantResponse);
       setChatHistory(prev => [...prev, { role: "assistant", content: assistantResponse }]);
     } catch (error) {
       console.error(error);
       const errorMsg = "Sorry, there was an error processing your request.";
-      speak(errorMsg);
+      await speak(errorMsg);
       setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
     } finally {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (chatHistory.length === 1 && chatHistory[0].role === "assistant") {
+      setChatHistory([{ 
+        role: "assistant", 
+        content: TRANSLATIONS[selectedLanguage].welcome 
+      }]);
+    }
+  }, [selectedLanguage]);
 
   return (
     <AnimatePresence>
@@ -598,6 +897,15 @@ Please enter the number (1-3) for your choice.`;
                     <Mic className="w-4 h-4" />
                   }
                 </Button>
+                {isSpeaking && (
+                  <Button 
+                    variant="destructive" 
+                    onClick={() => speechSynthesis.cancel()}
+                    title="Stop Speaking"
+                  >
+                    <StopCircle className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             </div>
             {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
