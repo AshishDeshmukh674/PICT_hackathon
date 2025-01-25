@@ -72,6 +72,8 @@ Instructions for response:
    - Ensure responses are clear and concise
    - Maintain professional tone
    - Provide complete information
+   6.If the symptom is not clear, ask for more specific information
+7.If the user has some serious symptoms, then give them the emergency contact number as 9822081777
       `
     };
 

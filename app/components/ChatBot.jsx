@@ -728,6 +728,7 @@ export default function ChatBot({ isOpen, onClose }) {
         case 3:
           // Clean and validate phone number
           const phoneNumber = input.replace(/[^0-9]/g, '').replace(/\.+$/, '');
+          console.log('Phone number:', phoneNumber); // Debug log
           
           // Check if phone number is valid (10 digits)
           if (phoneNumber.length !== 10) {
