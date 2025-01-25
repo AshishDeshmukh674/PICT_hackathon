@@ -9,13 +9,17 @@ import { ChatMessage } from "./ChatMessage";
 import GlobalApi from "../_utils/GlobalApi";
 import axios from 'axios';
 import { FileUploadHandler } from "./FileUploadHandler";
-
 const LANGUAGE_OPTIONS = {
   en: "English",
-  hi: "Hindi",
+  hi: "Hindi", 
   mr: "Marathi",
   gu: "Gujarati"
 };
+
+// Persist recognition instance between renders
+const recognition = typeof window !== 'undefined' && 
+                   'webkitSpeechRecognition' in window ? 
+                   new webkitSpeechRecognition() : null;
 
 function ChatHeader({ onClose }) {
   return (
@@ -28,6 +32,12 @@ function ChatHeader({ onClose }) {
   );
 }
 
+// Move speech recognition setup outside component
+if (recognition) {
+  recognition.continuous = false;
+  recognition.lang = "en-US";
+  recognition.interimResults = false;
+}
 function TypingAnimation() {
   return (
     <div className="flex space-x-2">
@@ -195,7 +205,6 @@ const sendMessage = async (formData) => {
 };
 
 export default function ChatBot({ isOpen, onClose }) {
-  const [userInput, setUserInput] = useState("");
   const [chatHistory, setChatHistory] = useState([
     { 
       role: "assistant", 
@@ -208,7 +217,7 @@ export default function ChatBot({ isOpen, onClose }) {
   const [bookingStep, setBookingStep] = useState(0);
   const [bookingData, setBookingData] = useState({
     name: "",
-    email: "",
+    email: "", 
     phone: "",
     doctorId: "",
     timeSlot: "",
@@ -221,120 +230,180 @@ export default function ChatBot({ isOpen, onClose }) {
   const [clinicType, setClinicType] = useState('Morning Clinic - Ratnamukund Clinic, Warje');
   const [availableTimeSlots, setAvailableTimeSlots] = useState([]);
   const [selectedLanguage, setSelectedLanguage] = useState("en");
+  const [userInput, setUserInput] = useState(""); // Add state for user input
 
+  // Update the useEffect hook to handle voice recognition properly 
   useEffect(() => {
-    if (!("webkitSpeechRecognition" in window)) {
+    if (!recognition) {
       setError("Voice recognition is not supported in your browser.");
       return;
     }
-
-    const recognition = new webkitSpeechRecognition();
-    recognition.continuous = false;
-    recognition.lang = "en-US";
-    recognition.interimResults = false;
-
+  
+    recognitionRef.current = recognition;
+  
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
-      setUserInput(transcript);
-      handleUserInput(transcript);
+      setUserInput(transcript); // Update userInput state instead of directly handling
     };
-
-    recognition.onerror = () => {
+  
+    recognition.onend = () => {
+      setIsRecording(false);
+      // Handle the transcript after recognition ends
+      if (userInput) {
+        handleUserInput(userInput);
+        setUserInput(""); // Clear input after handling
+      }
+    };
+  
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
       setError("Voice recognition failed. Please try again.");
       setIsRecording(false);
     };
-
-    recognition.onend = () => setIsRecording(false);
-
-    recognitionRef.current = recognition;
-  }, []);
-
-  const speak = (text) => {
-    if ("speechSynthesis" in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "en-US";
-      utterance.rate = 1;
-      speechSynthesis.speak(utterance);
+  
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, [userInput]); // Add userInput as dependency
+  
+  // Update the toggleRecording function
+  const toggleRecording = () => {
+    if (isRecording) {
+      recognitionRef.current?.stop();
+    } else {
+      setUserInput(""); // Clear any existing input
+      recognitionRef.current?.start();
     }
+    setIsRecording(!isRecording);
   };
+  // Add speech synthesis utility
+const speak = (text) => {
+  if ('speechSynthesis' in window) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    speechSynthesis.speak(utterance);
+  }
+};
 
-  const handleUserInput = async (input) => {
-    if (!input.trim()) return;
-    
-    setIsLoading(true);
-    setChatHistory(prev => [...prev, { role: "user", content: input }]);
+// Update handleUserInput function
+const handleUserInput = async (input) => {
+  if (!input.trim()) return;
+  
+  setIsLoading(true);
+  const newMessage = { role: "user", content: input };
+  setChatHistory(prev => [...prev, newMessage]);
 
-    try {
-      if (bookingStep > 0 || input.toLowerCase().includes("book") || input.toLowerCase().includes("appointment")) {
-        // Keep booking flow in English
-        await handleBookingFlow(input);
-      } else {
-        const response = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            chatHistory: [...chatHistory, { role: "user", content: input }],
-            language: selectedLanguage // Pass selected language to API
-          }),
-        });
+  try {
+    if (bookingStep > 0 || input.toLowerCase().includes("book") || input.toLowerCase().includes("appointment")) {
+      await handleBookingFlow(input);
+    } else {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chatHistory: [...chatHistory, newMessage],
+          language: selectedLanguage
+        }),
+      });
 
-        if (!response.ok) throw new Error("Failed to get response from server");
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-        const data = await response.json();
+      const data = await response.json();
+      if (data.response) {
         speak(data.response);
         setChatHistory(prev => [...prev, { 
           role: "assistant", 
-          content: data.response
+          content: data.response 
         }]);
+      } else {
+        throw new Error("No response received from server");
       }
-    } catch (error) {
-      console.error(error);
-      const errorMsg = "Sorry, there was an error processing your request.";
-      speak(errorMsg);
-      setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-    } finally {
-      setIsLoading(false);
-      setUserInput("");
     }
-  };
+  } catch (error) {
+    console.error('Chat error:', error);
+    const errorMsg = "Sorry, there was an error processing your request.";
+    if ('speechSynthesis' in window) {
+      speak(errorMsg);
+    }
+    setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+  } finally {
+    setIsLoading(false);
+    setUserInput("");
+  }
+};
 
-  const handleBookingFlow = async (input) => {
-    try {
-      switch(bookingStep) {
-        case 0:
-          setBookingStep(1);
-          const namePrompt = "Please provide your name.";
-          speak(namePrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: namePrompt }]);
-          break;
+  // Update handleBookingFlow function
+const handleBookingFlow = async (input) => {
+  try {
+    switch (bookingStep) {
+      case 0:
+        setChatHistory(prev => [...prev, { 
+          role: "assistant", 
+          content: "Please provide your name to book an appointment." 
+        }]);
+        setBookingStep(1);
+        break;
 
-        case 1:
-          setBookingData(prev => ({ ...prev, name: input }));
-          setBookingStep(2);
-          const emailPrompt = "Thank you. Now please provide your email address.";
-          speak(emailPrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: emailPrompt }]);
-          break;
+      case 1:
+        setBookingData(prev => ({ ...prev, name: input }));
+        setChatHistory(prev => [...prev, { 
+          role: "assistant", 
+          content: "Please provide your email address." 
+        }]);
+        setBookingStep(2);
+        break;
 
-        case 2:
-          setBookingData(prev => ({ ...prev, email: input }));
-          setBookingStep(3);
-          const phonePrompt = "Please provide your phone number.";
-          speak(phonePrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: phonePrompt }]);
-          break;
+      case 2:
+        if (!input.includes('@')) {
+          throw new Error("Invalid email format");
+        }
+        setBookingData(prev => ({ ...prev, email: input }));
+        setChatHistory(prev => [...prev, { 
+          role: "assistant", 
+          content: "Please provide your phone number." 
+        }]);
+        setBookingStep(3);
+        break;
 
         case 3:
-          setBookingData(prev => ({ ...prev, phone: input }));
-          const doctors = await GlobalApi.getDoctorList();
-          setAvailableDoctors(doctors.data.data);
-          const doctorList = doctors.data.data.map(doc => 
-            `Doctor ID: ${doc.id} - ${doc.attributes.Name}`
-          ).join('\n');
-          const doctorPrompt = `Here are the available doctors:\n${doctorList}\nPlease choose a doctor by saying their ID number.`;
-          speak(doctorPrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: doctorPrompt }]);
-          setBookingStep(4);
+          // Normalize phone number by removing spaces and any special characters
+          const normalizedPhone = input.replace(/[\s\-\(\)]/g, '');
+          
+          // Check for Indian phone number format (10 digits, optionally starting with +91)
+          const phoneRegex = /^(\+91)?[6-9]\d{9}$/;
+          
+          if (!phoneRegex.test(normalizedPhone)) {
+              const errorMsg = "Please enter a valid 10-digit Indian phone number";
+              speak(errorMsg);
+              setChatHistory(prev => [...prev, { 
+                  role: "assistant", 
+                  content: errorMsg 
+              }]);
+              break;
+          }
+      
+          // Store phone number without country code
+          const finalPhone = normalizedPhone.slice(-10);
+          setBookingData(prev => ({ ...prev, phone: finalPhone }));
+          
+          // Fetch available doctors and proceed
+          try {
+              const doctorsResponse = await fetch("/api/doctors");
+              const doctors = await doctorsResponse.json();
+              setAvailableDoctors(doctors);
+              
+              const doctorList = doctors.map(d => `${d.id}. ${d.name}`).join('\n');
+              setChatHistory(prev => [...prev, { 
+                  role: "assistant", 
+                  content: `Please select a doctor by entering their number:\n${doctorList}` 
+              }]);
+              setBookingStep(4);
+          } catch (error) {
+              throw new Error("Failed to fetch doctors list");
+          }
           break;
 
         case 4:
@@ -501,14 +570,14 @@ Please enter the number (1-3) for your choice.`;
     }
   };
 
-  const toggleRecording = () => {
-    if (isRecording) {
-      recognitionRef.current?.stop();
-    } else {
-      recognitionRef.current?.start();
-    }
-    setIsRecording(!isRecording);
-  };
+  // const toggleRecording = () => {
+  //   if (isRecording) {
+  //     recognitionRef.current?.stop();
+  //   } else {
+  //     recognitionRef.current?.start();
+  //   }
+  //   setIsRecording(!isRecording);
+  // };
 
   const handleExtractedText = async (text) => {
     if (!text.trim()) return;
