@@ -47,20 +47,25 @@ useEffect(()=>{
         <Campaign/>
       </div>
       <div id="main-container" className="main-container">
-      <div id="contact-card" className="card-container">
+        <div id="contact-card" className="card-container">
           <h1 id="contact-header" className="header-text">Contact Us</h1>
           <Contact />
-      </div>
-      <div id="timings-card" className="timings-container">
+        </div>
+        <div id="timings-card" className="timings-container">
           <Timings />
+        </div>
       </div>
-      </div>
-      {/* <div id="map-container" className="map-container">
+      
+      {/* Chatbot and Map Container */}
+      <div className="relative">
+        <div id="map-container" className="map-container relative z-0">
           <MapComponent />
-      </div> */}
-      <div>
-        <Chatbot/>
+        </div>
+        <div className="fixed bottom-20 right-4 z-[1000]">
+          <Chatbot />
+        </div>
       </div>
+
       <div className="mb-10 flex justify-center">
         <Link 
           href="/meetings" 
