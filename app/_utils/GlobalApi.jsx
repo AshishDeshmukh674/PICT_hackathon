@@ -80,7 +80,7 @@ const API_KEY = process.env.NEXT_PUBLIC_STRAPI_API_KEY;
 const axiosClient = axios.create({
     // baseURL: 'https://appointment-booking-strapi.onrender.com/api',
     // baseURL:'http://localhost:1337/api',
-    baseURL:'https://pict-strapi.onrender.com/api',
+    baseURL:'https://pict-strapi-jw5e.onrender.com/api',
     headers: {
         'Authorization': `Bearer ${API_KEY}`
     }
