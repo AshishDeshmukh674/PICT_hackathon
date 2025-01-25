@@ -12,11 +12,38 @@ import { FileUploadHandler } from "./FileUploadHandler";
 
 const LANGUAGE_OPTIONS = {
   en: "English",
-  hi: "Hindi",
+  hi: "Hindi", 
   mr: "Marathi",
   gu: "Gujarati"
 };
-
+const languageConfig = {
+  en: {
+    lang: "en-US",
+    fallbackLangs: ["en-GB", "en"],
+    preferredVoices: ["Google US English", "Microsoft David", "Alex"]
+  },
+  hi: {
+    lang: "hi-IN",
+    fallbackLangs: ["hi"],
+    preferredVoices: ["Google हिन्दी", "Microsoft Hemant"]
+  },
+  mr: {  // Marathi uses Hindi config
+    lang: "hi-IN",
+    fallbackLangs: ["hi"],
+    preferredVoices: ["Microsoft Hemant", "Google हिन्दी"]
+  },
+  gu: {  // Gujarati uses Hindi config
+    lang: "hi-IN",
+    fallbackLangs: ["hi"],
+    preferredVoices: ["Microsoft Hemant", "Google हिन्दी"]
+  }
+};
+const VOICE_CONFIG = {
+  en: { lang: 'en-US', voiceName: 'Google US English' },
+  hi: { lang: 'hi-IN', voiceName: 'Microsoft Hemant - Hindi (India)' },
+  mr: { lang: 'mr-IN', voiceName: 'Microsoft Hemant - Hindi (India)' },
+  gu: { lang: 'gu-IN', voiceName: 'Microsoft Hemant - Hindi (India)' }
+};
 const TRANSLATIONS = {
   en: {
     welcome: "Hello! I'm your medical assistant. How can I help you today? You can book an appointment or ask me health-related questions.",
@@ -471,73 +498,49 @@ export default function ChatBot({ isOpen, onClose }) {
         if (speechSynthesis.speaking) {
           speechSynthesis.cancel();
         }
-
+  
         const voices = await forceLoadVoices();
         const utterance = new SpeechSynthesisUtterance(text);
         
-        // Language configurations with fallbacks
-        const languageConfig = {
-          en: {
-            lang: "en-US",
-            fallbackLangs: ["en-GB", "en"],
-            preferredVoices: ["Google US English", "Microsoft David", "Alex"]
-          },
-          hi: {
-            lang: "hi-IN",
-            fallbackLangs: ["hi"],
-            preferredVoices: ["Google हिन्दी", "Microsoft Hemant"]
-          },
-          mr: {
-            lang: "mr-IN",
-            fallbackLangs: ["mr"],
-            preferredVoices: ["Google मराठी", "Microsoft Marathi"]
-          },
-          gu: {
-            lang: "gu-IN",
-            fallbackLangs: ["gu"],
-            preferredVoices: ["Google ગુજરાતી", "Microsoft Gujarati"]
-          }
-        };
-
-        const config = languageConfig[selectedLanguage] || languageConfig.en;
-        utterance.lang = config.lang;
-
+        // Force Hindi voice for Marathi and Gujarati
+        const langConfig = ['mr', 'gu'].includes(selectedLanguage) ? 
+          languageConfig.hi : 
+          languageConfig[selectedLanguage] || languageConfig.en;
+  
+        utterance.lang = langConfig.lang;
+        
         // Find the best matching voice
         let selectedVoice = null;
-
-        // Voice selection logic...
-        for (const preferredVoice of config.preferredVoices) {
+  
+        // First try preferred voices
+        for (const preferredVoice of langConfig.preferredVoices) {
           selectedVoice = voices.find(voice => 
             voice.name.includes(preferredVoice) || 
             voice.voiceURI.includes(preferredVoice)
           );
           if (selectedVoice) break;
         }
-
+  
+        // Then try language fallbacks
         if (!selectedVoice) {
-          selectedVoice = voices.find(voice => voice.lang === config.lang);
-        }
-
-        if (!selectedVoice) {
-          for (const fallbackLang of config.fallbackLangs) {
+          for (const fallbackLang of langConfig.fallbackLangs) {
             selectedVoice = voices.find(voice => 
               voice.lang.startsWith(fallbackLang)
             );
             if (selectedVoice) break;
           }
         }
-
+  
+        // Final fallback to any available voice
         if (!selectedVoice) {
-          const langCode = config.lang.split('-')[0];
-          selectedVoice = voices.find(voice => 
-            voice.lang.includes(langCode)
-          );
+          selectedVoice = voices[0];
         }
-
+  
         if (selectedVoice) {
           utterance.voice = selectedVoice;
           console.log(`Using voice: ${selectedVoice.name} (${selectedVoice.lang})`);
         }
+  
 
         utterance.rate = selectedLanguage === 'en' ? 1 : 0.9;
         utterance.pitch = 1;
@@ -588,15 +591,18 @@ export default function ChatBot({ isOpen, onClose }) {
       setError("Voice recognition is not supported in your browser.");
       return;
     }
-
+  
     const recognition = new webkitSpeechRecognition();
     recognition.continuous = false;
+    // Set proper recognition languages
     recognition.lang = selectedLanguage === "en" ? "en-US" : 
                       selectedLanguage === "hi" ? "hi-IN" : 
                       selectedLanguage === "mr" ? "mr-IN" : 
                       selectedLanguage === "gu" ? "gu-IN" : "en-US";
     recognition.interimResults = false;
-
+  
+    // ... rest of the recognition setup
+ 
     recognition.onresult = async (event) => {
       const transcript = event.results[0][0].transcript;
       // Clean the input text before processing
@@ -1134,17 +1140,26 @@ export default function ChatBot({ isOpen, onClose }) {
           </ScrollArea>
           <div className="p-4 border-t border-gray-200">
             <div className="flex justify-end mb-2">
-              <select 
-                value={selectedLanguage}
-                onChange={(e) => setSelectedLanguage(e.target.value)}
-                className="p-2 border rounded-md text-sm"
-              >
-                {Object.entries(LANGUAGE_OPTIONS).map(([code, name]) => (
-                  <option key={code} value={code}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+            <select 
+  value={selectedLanguage}
+  onChange={(e) => {
+    const lang = e.target.value;
+    setSelectedLanguage(lang);
+    if (recognitionRef.current) {
+      // Set proper recognition language while using Hindi voice for mr/gu
+      recognitionRef.current.lang = lang === "en" ? "en-US" : 
+                                   lang === "hi" ? "hi-IN" : 
+                                   lang === "mr" ? "mr-IN" : 
+                                   lang === "gu" ? "gu-IN" : "en-US";
+    }
+  }}
+  className="p-2 border rounded-md text-sm"
+>
+  {Object.entries(LANGUAGE_OPTIONS).map(([code, name]) => (
+    <option key={code} value={code}>{name}</option>
+  ))}
+</select>
+
             </div>
             <div className="flex gap-2">
               <Textarea
