@@ -101,19 +101,138 @@ const NUMBER_WORDS = {
   }
 };
 
+const TIME_WORDS = {
+  hi: {
+    'सुबह': 'AM',
+    'दोपहर': 'PM',
+    'शाम': 'PM',
+    'रात': 'PM',
+    'एएम': 'AM',
+    'पीएम': 'PM',
+    'बजे': '',
+    'साढ़े': ':30',
+    'पौने': ':45',
+    'पंद्रह': ':15',
+    'एक': '1',
+    'दो': '2',
+    'तीन': '3',
+    'चार': '4',
+    'पांच': '5',
+    'छह': '6',
+    'सात': '7',
+    'आठ': '8',
+    'नौ': '9',
+    'दस': '10',
+    'ग्यारह': '11',
+    'बारह': '12'
+  },
+  mr: {
+    'सकाळी': 'AM',
+    'दुपारी': 'PM',
+    'संध्याकाळी': 'PM',
+    'रात्री': 'PM',
+    'एएम': 'AM',
+    'पीएम': 'PM',
+    'वाजता': '',
+    'साडे': ':30',
+    'पाऊण': ':45',
+    'पंधरा': ':15',
+    'एक': '1',
+    'दोन': '2',
+    'तीन': '3',
+    'चार': '4',
+    'पाच': '5',
+    'सहा': '6',
+    'सात': '7',
+    'आठ': '8',
+    'नऊ': '9',
+    'दहा': '10',
+    'अकरा': '11',
+    'बारा': '12'
+  }
+};
+
 const convertNumberWordsToDigits = (input, language) => {
   if (!input) return input;
   
-  let processedInput = input.toLowerCase();
+  // Clean and normalize the input
+  let processedInput = cleanInputText(input).toLowerCase();
   const numberMap = NUMBER_WORDS[language] || NUMBER_WORDS.en;
   
-  // Replace number words with digits
-  Object.entries(numberMap).forEach(([word, digit]) => {
-    const regex = new RegExp(`\\b${word}\\b`, 'gi');
-    processedInput = processedInput.replace(regex, digit);
-  });
+  // First try exact match for the entire input
+  if (numberMap[processedInput]) {
+    return numberMap[processedInput];
+  }
+  
+  // Then try word by word replacement
+  processedInput = processedInput.split(' ').map(word => {
+    return numberMap[word] || word;
+  }).join(' ');
+  
+  // Extract the first number found
+  const numberMatch = processedInput.match(/\d+/);
+  if (numberMatch) {
+    return numberMatch[0];
+  }
   
   return processedInput;
+};
+
+// Modify the cleanInputText function
+const cleanInputText = (text) => {
+  if (!text) return text;
+  
+  // Remove special characters like ।, |, ॥, and trailing dots
+  return text
+    .replace(/[।|॥]/g, '') // Remove Hindi/Marathi punctuation
+    .replace(/\.$/, '')     // Remove trailing dot
+    .replace(/\.(?!\d)/g, '') // Remove dots that aren't part of numbers
+    .trim();
+};
+
+// Add this helper function to convert time expressions
+const convertTimeExpression = (input, language) => {
+  if (!input || !TIME_WORDS[language]) return input;
+
+  let timeStr = input.trim();
+  const timeWords = TIME_WORDS[language];
+  
+  // Convert time period (AM/PM)
+  Object.entries(timeWords).forEach(([word, value]) => {
+    const regex = new RegExp(word, 'gi');
+    timeStr = timeStr.replace(regex, value);
+  });
+
+  // Extract hours, minutes, and period
+  const timeMatch = timeStr.match(/(\d+)(?::(\d+))?\s*(AM|PM)?/i);
+  if (!timeMatch) return input;
+
+  let [, hours, minutes = '00', period] = timeMatch;
+  hours = parseInt(hours);
+
+  // Handle time period context
+  if (!period) {
+    if (timeStr.includes('दोपहर') || timeStr.includes('शाम') || timeStr.includes('रात') ||
+        timeStr.includes('दुपारी') || timeStr.includes('संध्याकाळी') || timeStr.includes('रात्री')) {
+      period = 'PM';
+    } else if (timeStr.includes('सुबह') || timeStr.includes('सकाळी')) {
+      period = 'AM';
+    }
+  }
+
+  // Adjust hours for PM
+  if (period === 'PM' && hours < 12) {
+    hours += 12;
+  }
+  if (period === 'AM' && hours === 12) {
+    hours = 0;
+  }
+
+  // Format time in 12-hour format
+  const formattedHours = hours % 12 || 12;
+  const formattedTime = `${formattedHours}:${minutes.padStart(2, '0')} ${period || 'AM'}`;
+
+  return formattedTime;
 };
 
 function ChatHeader({ onClose }) {
@@ -293,6 +412,14 @@ const sendMessage = async (formData) => {
   }
 };
 
+// Add this function to check if the API response is valid
+const isValidDoctorResponse = (response) => {
+  return response?.data?.data && 
+         Array.isArray(response.data.data) && 
+         response.data.data.length > 0 &&
+         response.data.data.every(doc => doc.id && doc.attributes?.Name);
+};
+
 export default function ChatBot({ isOpen, onClose }) {
   const [userInput, setUserInput] = useState("");
   const [chatHistory, setChatHistory] = useState([
@@ -464,23 +591,20 @@ export default function ChatBot({ isOpen, onClose }) {
                       selectedLanguage === "gu" ? "gu-IN" : "en-US";
     recognition.interimResults = false;
 
-    let isProcessing = false;
-
     recognition.onresult = async (event) => {
-      if (isProcessing) return;
-      isProcessing = true;
-      
       const transcript = event.results[0][0].transcript;
-      setUserInput(transcript);
+      // Clean the input text before processing
+      const cleanedInput = cleanInputText(transcript);
+      setUserInput(cleanedInput);
       
       try {
         if (bookingStep > 0) {
-          await handleBookingFlow(transcript);
+          await handleBookingFlow(cleanedInput);
         } else {
-          await handleUserInput(transcript);
+          await handleUserInput(cleanedInput);
         }
-      } finally {
-        isProcessing = false;
+      } catch (error) {
+        console.error("Error processing voice input:", error);
       }
     };
 
@@ -490,13 +614,12 @@ export default function ChatBot({ isOpen, onClose }) {
         setError("Voice recognition failed. Please try again.");
       }
       setIsRecording(false);
-      isProcessing = false;
     };
 
     recognition.onend = () => {
       setIsRecording(false);
       // Only restart if we're in booking flow and not processing
-      if (bookingStep > 0 && !isProcessing && !error) {
+      if (bookingStep > 0 && !error) {
         setTimeout(() => {
           try {
             if (!recognition.started) {
@@ -603,30 +726,110 @@ export default function ChatBot({ isOpen, onClose }) {
           break;
 
         case 3:
-          setBookingData(prev => ({ ...prev, phone: input }));
-          const doctors = await GlobalApi.getDoctorList();
-          setAvailableDoctors(doctors.data.data);
-          const doctorList = doctors.data.data.map(doc => 
-            `Doctor ID: ${doc.id} - ${doc.attributes.Name}`
-          ).join('\n');
-          const doctorPrompt = messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
-          await speak(doctorPrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: doctorPrompt }]);
-          setBookingStep(4);
+          // Clean and validate phone number
+          const phoneNumber = input.replace(/[^0-9]/g, '').replace(/\.+$/, '');
+          
+          // Check if phone number is valid (10 digits)
+          if (phoneNumber.length !== 10) {
+            const errorMsg = messages.invalidPhoneNumber || "Please provide a valid 10-digit phone number.";
+            await speak(errorMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            break;
+          }
+
+          try {
+            // Set the phone number first
+            setBookingData(prev => ({ ...prev, phone: phoneNumber }));
+
+            // Fetch doctor list with retry mechanism
+            let retryCount = 0;
+            let doctorsResponse = null;
+            
+            while (retryCount < 3) {
+              try {
+                doctorsResponse = await GlobalApi.getDoctorList();
+                if (isValidDoctorResponse(doctorsResponse)) {
+                  break;
+                }
+                retryCount++;
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+              } catch (err) {
+                console.error(`Attempt ${retryCount + 1} failed:`, err);
+                retryCount++;
+                if (retryCount === 3) throw err;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+            }
+
+            if (!isValidDoctorResponse(doctorsResponse)) {
+              throw new Error('Invalid doctor list response');
+            }
+
+            const doctors = doctorsResponse.data.data;
+            setAvailableDoctors(doctors);
+
+            // Create doctor list string
+            const doctorList = doctors
+              .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name}`)
+              .join('\n');
+
+            const doctorPrompt = messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
+            
+            // Log successful doctor list fetch
+            console.log('Successfully fetched doctors:', doctors.length);
+            console.log('Doctor list:', doctorList);
+
+            await speak(doctorPrompt);
+            setChatHistory(prev => [...prev, { role: "assistant", content: doctorPrompt }]);
+            setBookingStep(4);
+
+          } catch (error) {
+            console.error('Doctor list fetch error:', {
+              error,
+              message: error.message,
+              response: error.response,
+              status: error.response?.status
+            });
+
+            // Handle specific error cases
+            let errorMsg;
+            if (error.response?.status === 404) {
+              errorMsg = "The doctor list service is currently unavailable. Please try again later.";
+            } else if (error.message === 'Invalid doctor list response') {
+              errorMsg = "Unable to retrieve the doctor list. Please try again.";
+            } else {
+              errorMsg = "There was a problem fetching the doctor list. Please try again in a moment.";
+            }
+
+            await speak(errorMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            // Stay on current step
+            break;
+          }
           break;
 
         case 4:
           // Convert number words to digits before parsing
           const processedInput = convertNumberWordsToDigits(input, selectedLanguage);
-          const doctorId = parseInt(processedInput);
+          console.log('Original input:', input); // Debug log
+          console.log('Processed input:', processedInput); // Debug log
           
-          if (isNaN(doctorId) || !availableDoctors.some(doc => doc.id === doctorId)) {
+          const doctorId = parseInt(processedInput);
+          console.log('Parsed doctor ID:', doctorId); // Debug log
+          console.log('Available doctors:', availableDoctors.map(d => d.id)); // Debug log
+          
+          // Check if the doctorId is valid
+          const isValidDoctor = availableDoctors.some(doc => doc.id === doctorId);
+          console.log('Is valid doctor:', isValidDoctor); // Debug log
+
+          if (!isValidDoctor) {
             const errorMsg = messages.invalidDoctorId;
             await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
             break;
           }
           
+          // If we get here, the doctor ID is valid
           setBookingData(prev => ({ ...prev, doctorId }));
           const datePrompt = messages.provideDate;
           await speak(datePrompt);
@@ -674,8 +877,16 @@ export default function ChatBot({ isOpen, onClose }) {
           break;
 
         case 6:
+          // Convert number words to digits first
+          const clinicNumberInput = convertNumberWordsToDigits(input, selectedLanguage);
           let selectedClinic;
-          switch(input.trim()) {
+          
+          // Clean and parse the input
+          const clinicChoice = clinicNumberInput.trim();
+          console.log('Clinic input:', input); // Debug log
+          console.log('Converted clinic number:', clinicChoice); // Debug log
+          
+          switch(clinicChoice) {
             case '1':
               selectedClinic = 'Morning Clinic - Ratnamukund Clinic, Warje';
               break;
@@ -691,32 +902,46 @@ export default function ChatBot({ isOpen, onClose }) {
               setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
               return;
           }
+          
           setClinicType(selectedClinic);
 
-          // Get available time slots
-          const slots = await getAvailableTimeSlots(
-            bookingData.doctorId, 
-            new Date(bookingData.date), 
-            selectedClinic
-          );
-          
-          if (slots.length === 0) {
-            const noSlotsMsg = messages.noTimeSlots;
-            await speak(noSlotsMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: noSlotsMsg }]);
-            setBookingStep(6); // Stay on same step to allow retry
+          try {
+            // Get available time slots
+            const slots = await getAvailableTimeSlots(
+              bookingData.doctorId, 
+              new Date(bookingData.date), 
+              selectedClinic
+            );
+            
+            if (slots.length === 0) {
+              const noSlotsMsg = messages.noTimeSlots;
+              await speak(noSlotsMsg);
+              setChatHistory(prev => [...prev, { role: "assistant", content: noSlotsMsg }]);
+              setBookingStep(6); // Stay on same step to allow retry
+              break;
+            }
+
+            const slotsPrompt = messages.availableSlots.replace('{slots}', slots.join('\n'));
+            await speak(slotsPrompt);
+            setChatHistory(prev => [...prev, { role: "assistant", content: slotsPrompt }]);
+            setAvailableTimeSlots(slots);
+            setBookingStep(7);
+          } catch (error) {
+            console.error('Error getting time slots:', error);
+            const errorMsg = messages.processingError;
+            await speak(errorMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
             break;
           }
-
-          const slotsPrompt = messages.availableSlots.replace('{slots}', slots.join('\n'));
-          await speak(slotsPrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: slotsPrompt }]);
-          setAvailableTimeSlots(slots);
-          setBookingStep(7);
           break;
 
         case 7:
-          const selectedTime = input.trim().toUpperCase();
+          // Convert time expression to standard format
+          const convertedTime = convertTimeExpression(input, selectedLanguage);
+          console.log('Original time input:', input); // Debug log
+          console.log('Converted time:', convertedTime); // Debug log
+
+          const selectedTime = convertedTime.trim().toUpperCase();
           if (!availableTimeSlots.includes(selectedTime)) {
             const errorMsg = messages.invalidTimeSlot;
             await speak(errorMsg);
@@ -735,6 +960,7 @@ export default function ChatBot({ isOpen, onClose }) {
               doctor: bookingData.doctorId
             }
           };
+          console.log('Appointment data:', appointmentData);
 
           try {
             // Book the appointment
@@ -770,10 +996,26 @@ export default function ChatBot({ isOpen, onClose }) {
           break;
       }
     } catch (error) {
-      console.error(error);
-      await speak(messages.processingError);
-      setChatHistory(prev => [...prev, { role: "assistant", content: messages.processingError }]);
-      setBookingStep(0);
+      console.error('Error in handleBookingFlow:', error);
+      console.error('Error details:', {
+        bookingStep,
+        input,
+        error: error.message
+      });
+      
+      const errorMsg = error.message || messages.processingError;
+      await speak(errorMsg);
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: errorMsg 
+      }]);
+      
+      // Only reset booking step for certain errors
+      if (error.message === 'Failed to fetch doctor list. Please try again.') {
+        setBookingStep(3); // Stay on phone number step
+      } else {
+        setBookingStep(0); // Reset flow for other errors
+      }
     }
   };
 
