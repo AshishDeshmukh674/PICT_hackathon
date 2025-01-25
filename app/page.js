@@ -54,11 +54,13 @@ useEffect(()=>{
           <Timings />
       </div>
       </div>
-      {/* <div id="map-container" className="map-container">
+      <div className="relative">
+        <div id="map-container" className="map-container relative z-0">
           <MapComponent />
-      </div> */}
-      <div>
-        <Chatbot/>
+        </div>
+        <div className="fixed bottom-20 right-4 z-[1000]">
+          <Chatbot />
+        </div>
       </div>
     </>
   );

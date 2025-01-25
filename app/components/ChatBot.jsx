@@ -258,19 +258,34 @@ function TypingAnimation() {
 
 const getTimeSlotsForDoctor = (doctorId) => {
   const doctorTimeSlots = {
-    '3': { morning: [[8, 30], [9, 30]], evening: [[19, 30], [20, 30]] },
-    '4': { 
-      morning: [[8, 0], [9, 0]], 
-      evening: [[11, 0], [1, 0]],
-      AfterNoon: [[9, 0], [11, 0]]
+    '3': {
+      'Morning Clinic': [[8, 30], [11, 30]],
+      'Evening Clinic': [[16, 0], [20, 0]],
+      'AfterNoon Clinic': [[13, 0], [16, 0]]
+    },
+    '4': {
+      'Morning Clinic': [[8, 0], [12, 0]],
+      'Evening Clinic': [[16, 0], [20, 0]],
+      'AfterNoon Clinic': [[13, 0], [16, 0]]
     },
     '5': {
-      morning: [[8, 30], [11, 0]], 
-      evening: [[19, 0], [21, 0]]
+      'Morning Clinic': [[8, 30], [12, 0]],
+      'Evening Clinic': [[16, 0], [21, 0]],
+      'AfterNoon Clinic': [[13, 0], [16, 0]]
     },
-    '7': { morning: [[8, 0], [10, 45]] },
+    '7': {
+      'Morning Clinic': [[8, 0], [12, 0]],
+      'Evening Clinic': [[16, 0], [20, 0]],
+      'AfterNoon Clinic': [[13, 0], [16, 0]]
+    }
   };
-  return doctorTimeSlots[doctorId] || { morning: [[9, 0], [12, 0]], evening: [[13, 0], [18, 0]] };
+
+  // Default slots if doctor ID not found
+  return doctorTimeSlots[doctorId] || {
+    'Morning Clinic': [[9, 0], [12, 0]],
+    'Evening Clinic': [[16, 0], [20, 0]],
+    'AfterNoon Clinic': [[13, 0], [16, 0]]
+  };
 };
 
 const formatTime = (date) => {
@@ -298,57 +313,48 @@ const getAvailableTimeSlots = async (doctorId, date, clinicType) => {
       : [];
 
     const timeList = [];
-    const clinicTypeOnly = clinicType.split(" - ")[0];
-    const { morning, evening, AfterNoon } = getTimeSlotsForDoctor(doctorId);
+    const clinicTypeShort = clinicType.split(" - ")[0]; // Extract just the clinic type without location
+    const doctorSlots = getTimeSlotsForDoctor(doctorId.toString());
+    
+    if (!doctorSlots[clinicTypeShort]) {
+      console.error('No slots found for clinic type:', clinicTypeShort);
+      return [];
+    }
 
+    const [startSlot, endSlot] = doctorSlots[clinicTypeShort];
     const isToday = isSameDay(date, new Date());
     const now = new Date();
-    const dayOfWeek = date.getDay();
 
-    const generateTimeSlots = (startTime, endTime) => {
-      let [currentHour, currentMinutes] = startTime;
-      const [endHour, endMinutes] = endTime;
+    let currentHour = startSlot[0];
+    let currentMinutes = startSlot[1];
+    const endHour = endSlot[0];
+    const endMinutes = endSlot[1];
 
-      while (currentHour < endHour || (currentHour === endHour && currentMinutes < endMinutes)) {
-        const slotTime = new Date(date);
-        slotTime.setHours(currentHour, currentMinutes);
+    while (
+      currentHour < endHour || 
+      (currentHour === endHour && currentMinutes <= endMinutes)
+    ) {
+      const slotTime = new Date(date);
+      slotTime.setHours(currentHour, currentMinutes);
 
-        if (isToday && slotTime <= now) {
-          currentMinutes += 15;
-          if (currentMinutes === 60) {
-            currentHour++;
-            currentMinutes = 0;
-          }
-          continue;
-        }
-
-        const formattedTime = formatTime(slotTime);
-        if (!bookedSlots.includes(formattedTime)) {
-          timeList.push(formattedTime);
-        }
-
+      if (isToday && slotTime <= now) {
         currentMinutes += 15;
-        if (currentMinutes === 60) {
+        if (currentMinutes >= 60) {
           currentHour++;
           currentMinutes = 0;
         }
+        continue;
       }
-    };
 
-    // Special case for doctor ID 5
-    if (doctorId === 5) {
-      if (clinicTypeOnly === 'Morning Clinic' && (dayOfWeek === 1 || dayOfWeek === 6)) {
-        generateTimeSlots(morning[0], morning[1]);
-      } else if (clinicTypeOnly === 'Evening Clinic' && dayOfWeek === 4) {
-        generateTimeSlots(evening[0], evening[1]);
+      const formattedTime = formatTime(slotTime);
+      if (!bookedSlots.includes(formattedTime)) {
+        timeList.push(formattedTime);
       }
-    } else {
-      if (clinicTypeOnly === 'Morning Clinic' && morning) {
-        generateTimeSlots(morning[0], morning[1]);
-      } else if (clinicTypeOnly === 'Evening Clinic' && evening) {
-        generateTimeSlots(evening[0], evening[1]);
-      } else if (clinicTypeOnly === 'AfterNoon Clinic' && AfterNoon) {
-        generateTimeSlots(AfterNoon[0], AfterNoon[1]);
+
+      currentMinutes += 15;
+      if (currentMinutes >= 60) {
+        currentHour++;
+        currentMinutes = 0;
       }
     }
 
@@ -712,6 +718,13 @@ export default function ChatBot({ isOpen, onClose }) {
           break;
 
         case 1:
+          if (!input.trim()) {
+            const errorMsg = "Please provide a valid name.";
+            await speak(errorMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            // Stay on the same step
+            break;
+          }
           setBookingData(prev => ({ ...prev, name: input }));
           setBookingStep(2);
           await speak(messages.provideEmail);
@@ -728,20 +741,17 @@ export default function ChatBot({ isOpen, onClose }) {
         case 3:
           // Clean and validate phone number
           const phoneNumber = input.replace(/[^0-9]/g, '').replace(/\.+$/, '');
-          console.log('Phone number:', phoneNumber); // Debug log
-          
-          // Check if phone number is valid (10 digits)
           if (phoneNumber.length !== 10) {
-            const errorMsg = messages.invalidPhoneNumber || "Please provide a valid 10-digit phone number.";
+            const errorMsg = "Please provide a valid 10-digit phone number.";
             await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            // Repeat the phone prompt
+            await speak(messages.providePhone);
+            // Stay on the same step
             break;
           }
-
+          setBookingData(prev => ({ ...prev, phone: phoneNumber }));
           try {
-            // Set the phone number first
-            setBookingData(prev => ({ ...prev, phone: phoneNumber }));
-
             // Fetch doctor list with retry mechanism
             let retryCount = 0;
             let doctorsResponse = null;
@@ -810,23 +820,21 @@ export default function ChatBot({ isOpen, onClose }) {
           break;
 
         case 4:
-          // Convert number words to digits before parsing
           const processedInput = convertNumberWordsToDigits(input, selectedLanguage);
-          console.log('Original input:', input); // Debug log
-          console.log('Processed input:', processedInput); // Debug log
-          
           const doctorId = parseInt(processedInput);
-          console.log('Parsed doctor ID:', doctorId); // Debug log
-          console.log('Available doctors:', availableDoctors.map(d => d.id)); // Debug log
           
-          // Check if the doctorId is valid
-          const isValidDoctor = availableDoctors.some(doc => doc.id === doctorId);
-          console.log('Is valid doctor:', isValidDoctor); // Debug log
-
-          if (!isValidDoctor) {
+          if (!availableDoctors.some(doc => doc.id === doctorId)) {
             const errorMsg = messages.invalidDoctorId;
             await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            // Show doctor list again
+            const doctorList = availableDoctors
+                .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name}`)
+                .join('\n');
+            const doctorPrompt = messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
+            await speak(doctorPrompt);
+            setChatHistory(prev => [...prev, { role: "assistant", content: doctorPrompt }]);
+            // Stay on the same step
             break;
           }
           
@@ -839,7 +847,6 @@ export default function ChatBot({ isOpen, onClose }) {
           break;
 
         case 5:
-          // Validate date format and check if it's not in the past
           const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
           const match = input.match(dateRegex);
           
@@ -847,6 +854,9 @@ export default function ChatBot({ isOpen, onClose }) {
             const errorMsg = messages.invalidDateFormat;
             await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            // Repeat the date prompt
+            await speak(messages.provideDate);
+            // Stay on the same step
             break;
           }
 
@@ -859,6 +869,9 @@ export default function ChatBot({ isOpen, onClose }) {
             const errorMsg = messages.futureDateRequired;
             await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            // Repeat the date prompt
+            await speak(messages.provideDate);
+            // Stay on the same step
             break;
           }
 
@@ -866,6 +879,9 @@ export default function ChatBot({ isOpen, onClose }) {
             const errorMsg = messages.closedSunday;
             await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            // Repeat the date prompt
+            await speak(messages.provideDate);
+            // Stay on the same step
             break;
           }
 
@@ -878,47 +894,40 @@ export default function ChatBot({ isOpen, onClose }) {
           break;
 
         case 6:
-          // Convert number words to digits first
           const clinicNumberInput = convertNumberWordsToDigits(input, selectedLanguage);
-          let selectedClinic;
-          
-          // Clean and parse the input
           const clinicChoice = clinicNumberInput.trim();
-          console.log('Clinic input:', input); // Debug log
-          console.log('Converted clinic number:', clinicChoice); // Debug log
           
-          switch(clinicChoice) {
-            case '1':
-              selectedClinic = 'Morning Clinic - Ratnamukund Clinic, Warje';
-              break;
-            case '2':
-              selectedClinic = 'Evening Clinic - Ratnamukund Clinic, Warje';
-              break;
-            case '3':
-              selectedClinic = 'AfterNoon Clinic - Shashwat Clinic, Pune';
-              break;
-            default:
-              const errorMsg = messages.invalidClinic;
-              await speak(errorMsg);
-              setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-              return;
+          if (!['1', '2', '3'].includes(clinicChoice)) {
+            const errorMsg = messages.invalidClinic;
+            await speak(errorMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            await speak(messages.chooseClinic);
+            break;
           }
-          
+
+          const selectedClinic = clinicChoice === '1' 
+            ? 'Morning Clinic - Ratnamukund Clinic, Warje'
+            : clinicChoice === '2' 
+            ? 'Evening Clinic - Ratnamukund Clinic, Warje'
+            : 'AfterNoon Clinic - Shashwat Clinic, Pune';
+
           setClinicType(selectedClinic);
 
           try {
-            // Get available time slots
             const slots = await getAvailableTimeSlots(
               bookingData.doctorId, 
-              new Date(bookingData.date), 
+              new Date(bookingData.date),
               selectedClinic
             );
             
-            if (slots.length === 0) {
+            console.log('Available slots:', slots); // Debug log
+            
+            if (!slots || slots.length === 0) {
               const noSlotsMsg = messages.noTimeSlots;
               await speak(noSlotsMsg);
               setChatHistory(prev => [...prev, { role: "assistant", content: noSlotsMsg }]);
-              setBookingStep(6); // Stay on same step to allow retry
+              // Show clinic options again
+              await speak(messages.chooseClinic);
               break;
             }
 
@@ -937,16 +946,18 @@ export default function ChatBot({ isOpen, onClose }) {
           break;
 
         case 7:
-          // Convert time expression to standard format
           const convertedTime = convertTimeExpression(input, selectedLanguage);
-          console.log('Original time input:', input); // Debug log
-          console.log('Converted time:', convertedTime); // Debug log
-
           const selectedTime = convertedTime.trim().toUpperCase();
+          
           if (!availableTimeSlots.includes(selectedTime)) {
             const errorMsg = messages.invalidTimeSlot;
             await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            // Show available slots again
+            const slotsPrompt = messages.availableSlots.replace('{slots}', availableTimeSlots.join('\n'));
+            await speak(slotsPrompt);
+            setChatHistory(prev => [...prev, { role: "assistant", content: slotsPrompt }]);
+            // Stay on the same step
             break;
           }
 
@@ -998,25 +1009,43 @@ export default function ChatBot({ isOpen, onClose }) {
       }
     } catch (error) {
       console.error('Error in handleBookingFlow:', error);
-      console.error('Error details:', {
-        bookingStep,
-        input,
-        error: error.message
-      });
       
-      const errorMsg = error.message || messages.processingError;
+      // Instead of resetting the booking flow, stay on the current step
+      const errorMsg = messages.processingError;
       await speak(errorMsg);
-      setChatHistory(prev => [...prev, { 
-        role: "assistant", 
-        content: errorMsg 
-      }]);
+      setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
       
-      // Only reset booking step for certain errors
-      if (error.message === 'Failed to fetch doctor list. Please try again.') {
-        setBookingStep(3); // Stay on phone number step
-      } else {
-        setBookingStep(0); // Reset flow for other errors
+      // Repeat the current step's prompt
+      const currentPrompt = getCurrentStepPrompt(bookingStep, messages, availableDoctors, availableTimeSlots);
+      if (currentPrompt) {
+        await speak(currentPrompt);
+        setChatHistory(prev => [...prev, { role: "assistant", content: currentPrompt }]);
       }
+    }
+  };
+
+  // Helper function to get the appropriate prompt for the current step
+  const getCurrentStepPrompt = (step, messages, doctors, timeSlots) => {
+    switch(step) {
+      case 1:
+        return messages.provideName;
+      case 2:
+        return messages.provideEmail;
+      case 3:
+        return messages.providePhone;
+      case 4:
+        const doctorList = doctors
+          .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name}`)
+          .join('\n');
+        return messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
+      case 5:
+        return messages.provideDate;
+      case 6:
+        return messages.chooseClinic;
+      case 7:
+        return messages.availableSlots.replace('{slots}', timeSlots.join('\n'));
+      default:
+        return null;
     }
   };
 
