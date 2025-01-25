@@ -1,3 +1,4 @@
+"use client";
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Mic, StopCircle, X } from "lucide-react";
@@ -5,7 +6,16 @@ import { Button } from "../../components/ui/button";
 import { Textarea } from "../../components/ui/textarea";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { ChatMessage } from "./ChatMessage";
-import { FileUploadHandler } from './FileUploadHandler';
+import GlobalApi from "../_utils/GlobalApi";
+import axios from 'axios';
+import { FileUploadHandler } from "./FileUploadHandler";
+
+const LANGUAGE_OPTIONS = {
+  en: "English",
+  hi: "Hindi",
+  mr: "Marathi",
+  gu: "Gujarati"
+};
 
 function ChatHeader({ onClose }) {
   return (
@@ -18,34 +28,199 @@ function ChatHeader({ onClose }) {
   );
 }
 
-// TypingAnimation Component
-const TypingAnimation = () => {
+function TypingAnimation() {
   return (
-    <div className="flex space-x-1">
-      <div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-pulse"></div>
-      <div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-pulse delay-150"></div>
-      <div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-pulse delay-300"></div>
+    <div className="flex space-x-2">
+      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-150"></div>
+      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-300"></div>
     </div>
   );
+}
+
+const getTimeSlotsForDoctor = (doctorId) => {
+  const doctorTimeSlots = {
+    '3': { morning: [[8, 30], [9, 30]], evening: [[19, 30], [20, 30]] },
+    '4': { 
+      morning: [[8, 0], [9, 0]], 
+      evening: [[11, 0], [1, 0]],
+      AfterNoon: [[9, 0], [11, 0]]
+    },
+    '5': {
+      morning: [[8, 30], [11, 0]], 
+      evening: [[19, 0], [21, 0]]
+    },
+    '7': { morning: [[8, 0], [10, 45]] },
+  };
+  return doctorTimeSlots[doctorId] || { morning: [[9, 0], [12, 0]], evening: [[13, 0], [18, 0]] };
+};
+
+const formatTime = (date) => {
+  let hours = date.getHours();
+  const minutes = date.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours || 12;
+  const minutesStr = minutes < 10 ? `0${minutes}` : minutes;
+  return `${hours}:${minutesStr} ${ampm}`;
+};
+
+const isSameDay = (d1, d2) => {
+  return d1.getFullYear() === d2.getFullYear() &&
+         d1.getMonth() === d2.getMonth() &&
+         d1.getDate() === d2.getDate();
+};
+
+const getAvailableTimeSlots = async (doctorId, date, clinicType) => {
+  try {
+    const dateStr = date.toLocaleDateString('en-CA');
+    const response = await GlobalApi.getDoctorAppointmentsByDate(doctorId, dateStr);
+    const bookedSlots = response.data.data
+      ? response.data.data.map(appointment => appointment.attributes.Time)
+      : [];
+
+    const timeList = [];
+    const clinicTypeOnly = clinicType.split(" - ")[0];
+    const { morning, evening, AfterNoon } = getTimeSlotsForDoctor(doctorId);
+
+    const isToday = isSameDay(date, new Date());
+    const now = new Date();
+    const dayOfWeek = date.getDay();
+
+    const generateTimeSlots = (startTime, endTime) => {
+      let [currentHour, currentMinutes] = startTime;
+      const [endHour, endMinutes] = endTime;
+
+      while (currentHour < endHour || (currentHour === endHour && currentMinutes < endMinutes)) {
+        const slotTime = new Date(date);
+        slotTime.setHours(currentHour, currentMinutes);
+
+        if (isToday && slotTime <= now) {
+          currentMinutes += 15;
+          if (currentMinutes === 60) {
+            currentHour++;
+            currentMinutes = 0;
+          }
+          continue;
+        }
+
+        const formattedTime = formatTime(slotTime);
+        if (!bookedSlots.includes(formattedTime)) {
+          timeList.push(formattedTime);
+        }
+
+        currentMinutes += 15;
+        if (currentMinutes === 60) {
+          currentHour++;
+          currentMinutes = 0;
+        }
+      }
+    };
+
+    // Special case for doctor ID 5
+    if (doctorId === 5) {
+      if (clinicTypeOnly === 'Morning Clinic' && (dayOfWeek === 1 || dayOfWeek === 6)) {
+        generateTimeSlots(morning[0], morning[1]);
+      } else if (clinicTypeOnly === 'Evening Clinic' && dayOfWeek === 4) {
+        generateTimeSlots(evening[0], evening[1]);
+      }
+    } else {
+      if (clinicTypeOnly === 'Morning Clinic' && morning) {
+        generateTimeSlots(morning[0], morning[1]);
+      } else if (clinicTypeOnly === 'Evening Clinic' && evening) {
+        generateTimeSlots(evening[0], evening[1]);
+      } else if (clinicTypeOnly === 'AfterNoon Clinic' && AfterNoon) {
+        generateTimeSlots(AfterNoon[0], AfterNoon[1]);
+      }
+    }
+
+    return timeList;
+  } catch (error) {
+    console.error("Error getting available time slots:", error);
+    return [];
+  }
+};
+
+const sendMessage = async (formData) => {
+  const phoneNumbers = [
+    "+918149623527",
+    // "+919822038877",
+    // "+919764432460",
+  ];
+
+  try {
+    const promises = phoneNumbers.map(async (number) => {
+      const response = await axios.post(
+        `https://graph.facebook.com/v16.0/405802159279444/messages`,
+        {
+          messaging_product: "whatsapp",
+          to: number,
+          type: "template",
+          template: {
+            name: "booking_appointment",
+            language: { code: "en" },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  { type: "text", text: formData.user_name },  // {{1}}
+                  { type: "text", text: formData.user_phone },  // {{2}}
+                  { type: "text", text: formData.date },  // {{3}}
+                  { type: "text", text: formData.time },  // {{4}}
+                  { type: "text", text: formData.doctorName }  // {{5}}
+                ]
+              }
+            ]
+          }
+        },
+        {
+          headers: {
+            "Authorization": `Bearer EAAE2eCrRWPkBO5IJD2ZCjepnBu16tfITg1aSWXeVuoqMEXWLE0ME2JZAKRNQUeE5T19rKzPltkk5PNuxSfwqnxzRWJtJuoCAqBTJxTANQW7hRnlHvYokTVPVjPccghhJVCBCiKZBlUKAUvnzJmuftZCOesX5uNVIJ94YvaZBBEwKWfFt9BQ1qDjlfZAQ4C7uPZBDQZDZD`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      if (response.status !== 200) {
+        throw new Error(`Failed to send message to ${number}: ${response.data.error.message}`);
+      }
+    });
+
+    await Promise.all(promises);
+    return "Your message has been sent successfully to all recipients.";
+  } catch (error) {
+    console.error(`Failed to send message: ${error.message}`);
+    throw new Error(`Failed to send message: ${error.message}`);
+  }
 };
 
 export default function ChatBot({ isOpen, onClose }) {
   const [userInput, setUserInput] = useState("");
-  const [extractedText, setExtractedText] = useState("");
   const [chatHistory, setChatHistory] = useState([
-    { role: "system", content: "You are a helpful medical assistant." },
+    { 
+      role: "assistant", 
+      content: "Hello! I'm your medical assistant. How can I help you today? You can book an appointment or ask me health-related questions." 
+    }
   ]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
-  const chatContainerRef = useRef(null);
+  const [bookingStep, setBookingStep] = useState(0);
+  const [bookingData, setBookingData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    doctorId: "",
+    timeSlot: "",
+    date: ""
+  });
+  const [availableDoctors, setAvailableDoctors] = useState([]);
+  const [availableSlots, setAvailableSlots] = useState([]);
   const recognitionRef = useRef(null);
-
-  useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
-  }, [chatHistory]);
+  const chatContainerRef = useRef(null);
+  const [clinicType, setClinicType] = useState('Morning Clinic - Ratnamukund Clinic, Warje');
+  const [availableTimeSlots, setAvailableTimeSlots] = useState([]);
+  const [selectedLanguage, setSelectedLanguage] = useState("en");
 
   useEffect(() => {
     if (!("webkitSpeechRecognition" in window)) {
@@ -54,100 +229,25 @@ export default function ChatBot({ isOpen, onClose }) {
     }
 
     const recognition = new webkitSpeechRecognition();
+    recognition.continuous = false;
     recognition.lang = "en-US";
-    recognition.interimResults = true;
+    recognition.interimResults = false;
 
     recognition.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map((result) => result[0].transcript)
-        .join("");
+      const transcript = event.results[0][0].transcript;
       setUserInput(transcript);
+      handleUserInput(transcript);
     };
 
-    recognition.onerror = (event) => {
-      console.error("Voice recognition error:", event.error);
+    recognition.onerror = () => {
       setError("Voice recognition failed. Please try again.");
-    };
-
-    recognition.onend = () => {
       setIsRecording(false);
     };
+
+    recognition.onend = () => setIsRecording(false);
 
     recognitionRef.current = recognition;
   }, []);
-
-  const handleExtractedText = (text) => {
-    setUserInput((prev) => prev + '\n\nExtracted text from file:\n' + text);
-  };
-
-  const sendMessage = async () => {
-    if (!userInput.trim() && !extractedText.trim()) {
-      return;
-    }
-
-    const fullPrompt = userInput + extractedText;
-    
-    const updatedChatHistory = [
-      ...chatHistory,
-      { role: "user", content: userInput || "File uploaded" },
-    ];
-    
-    setChatHistory(updatedChatHistory);
-    setUserInput("");
-    setExtractedText("");
-    setIsLoading(true);
-    setError("");
-
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          chatHistory: [
-            ...chatHistory,
-            { role: "user", content: fullPrompt }
-          ]
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to get a response from the server.");
-      }
-
-      const data = await response.json();
-
-      const botReply = data.response;
-      setChatHistory([
-        ...updatedChatHistory,
-        { role: "assistant", content: botReply },
-      ]);
-
-      speak(botReply);
-    } catch (err) {
-      console.error(err);
-      setError("Something went wrong. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
-
-  const toggleRecording = () => {
-    if (isRecording) {
-      recognitionRef.current.stop();
-      setIsRecording(false);
-    } else {
-      setError("");
-      recognitionRef.current.start();
-      setIsRecording(true);
-    }
-  };
 
   const speak = (text) => {
     if ("speechSynthesis" in window) {
@@ -155,89 +255,355 @@ export default function ChatBot({ isOpen, onClose }) {
       utterance.lang = "en-US";
       utterance.rate = 1;
       speechSynthesis.speak(utterance);
+    }
+  };
+
+  const handleUserInput = async (input) => {
+    if (!input.trim()) return;
+    
+    setIsLoading(true);
+    setChatHistory(prev => [...prev, { role: "user", content: input }]);
+
+    try {
+      if (bookingStep > 0 || input.toLowerCase().includes("book") || input.toLowerCase().includes("appointment")) {
+        // Keep booking flow in English
+        await handleBookingFlow(input);
+      } else {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            chatHistory: [...chatHistory, { role: "user", content: input }],
+            language: selectedLanguage // Pass selected language to API
+          }),
+        });
+
+        if (!response.ok) throw new Error("Failed to get response from server");
+
+        const data = await response.json();
+        speak(data.response);
+        setChatHistory(prev => [...prev, { 
+          role: "assistant", 
+          content: data.response
+        }]);
+      }
+    } catch (error) {
+      console.error(error);
+      const errorMsg = "Sorry, there was an error processing your request.";
+      speak(errorMsg);
+      setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+    } finally {
+      setIsLoading(false);
+      setUserInput("");
+    }
+  };
+
+  const handleBookingFlow = async (input) => {
+    try {
+      switch(bookingStep) {
+        case 0:
+          setBookingStep(1);
+          const namePrompt = "Please provide your name.";
+          speak(namePrompt);
+          setChatHistory(prev => [...prev, { role: "assistant", content: namePrompt }]);
+          break;
+
+        case 1:
+          setBookingData(prev => ({ ...prev, name: input }));
+          setBookingStep(2);
+          const emailPrompt = "Thank you. Now please provide your email address.";
+          speak(emailPrompt);
+          setChatHistory(prev => [...prev, { role: "assistant", content: emailPrompt }]);
+          break;
+
+        case 2:
+          setBookingData(prev => ({ ...prev, email: input }));
+          setBookingStep(3);
+          const phonePrompt = "Please provide your phone number.";
+          speak(phonePrompt);
+          setChatHistory(prev => [...prev, { role: "assistant", content: phonePrompt }]);
+          break;
+
+        case 3:
+          setBookingData(prev => ({ ...prev, phone: input }));
+          const doctors = await GlobalApi.getDoctorList();
+          setAvailableDoctors(doctors.data.data);
+          const doctorList = doctors.data.data.map(doc => 
+            `Doctor ID: ${doc.id} - ${doc.attributes.Name}`
+          ).join('\n');
+          const doctorPrompt = `Here are the available doctors:\n${doctorList}\nPlease choose a doctor by saying their ID number.`;
+          speak(doctorPrompt);
+          setChatHistory(prev => [...prev, { role: "assistant", content: doctorPrompt }]);
+          setBookingStep(4);
+          break;
+
+        case 4:
+          const doctorId = parseInt(input);
+          if (isNaN(doctorId)) {
+            const errorMsg = "Please provide a valid doctor ID number.";
+            speak(errorMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            break;
+          }
+          
+          setBookingData(prev => ({ ...prev, doctorId }));
+          const datePrompt = "Please provide your preferred appointment date in DD/MM/YYYY format.";
+          speak(datePrompt);
+          setChatHistory(prev => [...prev, { role: "assistant", content: datePrompt }]);
+          setBookingStep(5);
+          break;
+
+        case 5:
+          // Validate date format and check if it's not in the past
+          const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+          const match = input.match(dateRegex);
+          
+          if (!match) {
+            const errorMsg = "Please provide the date in DD/MM/YYYY format.";
+            speak(errorMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            break;
+          }
+
+          const [, day, month, year] = match;
+          const selectedDate = new Date(year, month - 1, day);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          if (selectedDate < today) {
+            const errorMsg = "Please select a future date.";
+            speak(errorMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            break;
+          }
+
+          if (selectedDate.getDay() === 0) {
+            const errorMsg = "Sorry, we are closed on Sundays. Please select another date.";
+            speak(errorMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            break;
+          }
+
+          setBookingData(prev => ({ ...prev, date: selectedDate.toLocaleDateString('en-CA') }));
+          
+          const clinicPrompt = `Please choose a clinic type:
+1. Morning Clinic - Ratnamukund Clinic, Warje
+2. Evening Clinic - Ratnamukund Clinic, Warje
+3. AfterNoon Clinic - Shashwat Clinic, Pune
+Please enter the number (1-3) for your choice.`;
+          speak(clinicPrompt);
+          setChatHistory(prev => [...prev, { role: "assistant", content: clinicPrompt }]);
+          setBookingStep(6);
+          break;
+
+        case 6:
+          let selectedClinic;
+          switch(input.trim()) {
+            case '1':
+              selectedClinic = 'Morning Clinic - Ratnamukund Clinic, Warje';
+              break;
+            case '2':
+              selectedClinic = 'Evening Clinic - Ratnamukund Clinic, Warje';
+              break;
+            case '3':
+              selectedClinic = 'AfterNoon Clinic - Shashwat Clinic, Pune';
+              break;
+            default:
+              const errorMsg = "Please select a valid clinic type (1-3).";
+              speak(errorMsg);
+              setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+              return;
+          }
+          setClinicType(selectedClinic);
+
+          // Get available time slots
+          const slots = await getAvailableTimeSlots(
+            bookingData.doctorId, 
+            new Date(bookingData.date), 
+            selectedClinic
+          );
+          
+          if (slots.length === 0) {
+            const noSlotsMsg = "No available time slots for the selected date and clinic type. Would you like to try another clinic type? (yes/no)";
+            speak(noSlotsMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: noSlotsMsg }]);
+            setBookingStep(6); // Stay on same step to allow retry
+            break;
+          }
+
+          const slotsPrompt = `Available time slots are:\n${slots.join('\n')}\nPlease choose a time slot.`;
+          speak(slotsPrompt);
+          setChatHistory(prev => [...prev, { role: "assistant", content: slotsPrompt }]);
+          setAvailableTimeSlots(slots);
+          setBookingStep(7);
+          break;
+
+        case 7:
+          const selectedTime = input.trim().toUpperCase();
+          if (!availableTimeSlots.includes(selectedTime)) {
+            const errorMsg = "Please select a valid time slot from the list provided.";
+            speak(errorMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            break;
+          }
+
+          // Prepare and submit booking
+          const appointmentData = {
+            data: {
+              UserName: bookingData.name,
+              Email: bookingData.email,
+              PhoneNumber: bookingData.phone,
+              Time: selectedTime,
+              Date: bookingData.date,
+              doctor: bookingData.doctorId
+            }
+          };
+
+          try {
+            // Book the appointment
+            await GlobalApi.bookAppointment(appointmentData);
+
+            // Get doctor details for the message
+            const doctorResponse = await GlobalApi.getDoctorById(bookingData.doctorId);
+            const doctorName = doctorResponse.data.data.attributes.Name;
+
+            // Prepare form data for the WhatsApp message
+            const formData = {
+              user_name: bookingData.name,
+              user_phone: bookingData.phone,
+              date: new Date(bookingData.date).toLocaleDateString('en-GB'), // Convert to DD/MM/YYYY format
+              time: selectedTime,
+              doctorName: doctorName
+            };
+
+            // Send WhatsApp message
+            await sendMessage(formData);
+
+            const confirmationMsg = "Your appointment has been successfully booked! You will receive a confirmation message shortly.";
+            speak(confirmationMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: confirmationMsg }]);
+            setBookingStep(0); // Reset booking flow
+          } catch (error) {
+            console.error("Booking failed:", error);
+            const errorMsg = "Sorry, there was an error booking your appointment. Please try again.";
+            speak(errorMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            setBookingStep(0);
+          }
+          break;
+      }
+    } catch (error) {
+      console.error(error);
+      const errorMsg = "Sorry, there was an error processing your booking request. Please try again.";
+      speak(errorMsg);
+      setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+      setBookingStep(0);
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      recognitionRef.current?.stop();
     } else {
-      console.error("Text-to-speech is not supported in your browser.");
-      setError("Text-to-speech is not supported in your browser.");
+      recognitionRef.current?.start();
+    }
+    setIsRecording(!isRecording);
+  };
+
+  const handleExtractedText = async (text) => {
+    if (!text.trim()) return;
+    
+    setIsLoading(true);
+    setChatHistory(prev => [...prev, { role: "user", content: text }]);
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          chatHistory: [...chatHistory, { role: "user", content: text }]
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to get response from server");
+
+      const data = await response.json();
+      const assistantResponse = data.response;
+      
+      speak(assistantResponse);
+      setChatHistory(prev => [...prev, { role: "assistant", content: assistantResponse }]);
+    } catch (error) {
+      console.error(error);
+      const errorMsg = "Sorry, there was an error processing your request.";
+      speak(errorMsg);
+      setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <>
-          {/* Backdrop Layer */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.7 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-40"
-            onClick={onClose}
-          />
-
-          {/* ChatBot UI */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.3 }}
-            className="fixed bottom-4 right-4 w-full max-w-md bg-card rounded-lg shadow-xl overflow-hidden z-50"
-          >
-            <ChatHeader onClose={onClose} />
-            <ScrollArea className="h-[60vh] p-4 space-y-4">
-              <AnimatePresence>
-                {chatHistory.slice(1).map((message, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, y: 50 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -50 }}
-                    transition={{ duration: 0.5 }}
-                  >
-                    <ChatMessage role={message.role} content={message.content} />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-              {isLoading && (
-                <div className="flex justify-start">
-                  <TypingAnimation />
-                </div>
-              )}
-            </ScrollArea>
-            <div className="p-4 border-t border-border space-y-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 50 }}
+          className="fixed bottom-4 right-4 w-96 bg-white rounded-lg shadow-xl"
+        >
+          <ChatHeader onClose={onClose} />
+          <ScrollArea className="h-[400px] p-4">
+            {chatHistory.map((msg, idx) => (
+              <ChatMessage key={idx} role={msg.role} content={msg.content} />
+            ))}
+            {isLoading && <TypingAnimation />}
+            <div className="mt-4">
               <FileUploadHandler onExtractedText={handleExtractedText} />
-              <div className="flex space-x-2">
-                <Textarea
-                  value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
-                  placeholder="Ask me something about health..."
-                  className="flex-1 min-h-[80px] max-h-[200px] resize-y"
-                  onKeyPress={handleKeyPress}
-                />
-                <div className="flex flex-col space-y-2">
-                  <Button 
-                    onClick={sendMessage} 
-                    disabled={isLoading}
-                  >
-                    <Send className="w-4 h-4 mr-2" />
-                    Send
-                  </Button>
-                  <Button variant="outline" onClick={toggleRecording}>
-                    {isRecording ? (
-                      <StopCircle className="w-4 h-4 mr-2 text-destructive" />
-                    ) : (
-                      <Mic className="w-4 h-4 mr-2" />
-                    )}
-                    {isRecording ? "Stop" : "Voice"}
-                  </Button>
-                </div>
-              </div>
-              {error && <p className="text-destructive mt-2">{error}</p>}
             </div>
-          </motion.div>
-        </>
+          </ScrollArea>
+          <div className="p-4 border-t border-gray-200">
+            <div className="flex justify-end mb-2">
+              <select 
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+                className="p-2 border rounded-md text-sm"
+              >
+                {Object.entries(LANGUAGE_OPTIONS).map(([code, name]) => (
+                  <option key={code} value={code}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <Textarea
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
+                placeholder="Type your message..."
+                className="flex-1"
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleUserInput(userInput);
+                  }
+                }}
+              />
+              <div className="flex flex-col gap-2">
+                <Button onClick={() => handleUserInput(userInput)}>
+                  <Send className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" onClick={toggleRecording}>
+                  {isRecording ? 
+                    <StopCircle className="w-4 h-4 text-red-500" /> : 
+                    <Mic className="w-4 h-4" />
+                  }
+                </Button>
+              </div>
+            </div>
+            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+          </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );
 }
-
-
