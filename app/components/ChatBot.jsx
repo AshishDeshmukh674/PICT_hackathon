@@ -9,6 +9,7 @@ import { ChatMessage } from "./ChatMessage";
 import GlobalApi from "../_utils/GlobalApi";
 import axios from 'axios';
 import { FileUploadHandler } from "./FileUploadHandler";
+
 const LANGUAGE_OPTIONS = {
   en: "English",
   hi: "Hindi", 
@@ -16,10 +17,16 @@ const LANGUAGE_OPTIONS = {
   gu: "Gujarati"
 };
 
-// Persist recognition instance between renders
+const VOICE_CONFIG = {
+  en: { lang: 'en-US', voiceName: 'Google US English' },
+  hi: { lang: 'hi-IN', voiceName: 'Microsoft Hemant - Hindi (India)' },
+  mr: { lang: 'mr-IN', voiceName: 'Microsoft Hemant - Hindi (India)' },
+  gu: { lang: 'gu-IN', voiceName: 'Microsoft Hemant - Hindi (India)' }
+};
 const recognition = typeof window !== 'undefined' && 
                    'webkitSpeechRecognition' in window ? 
                    new webkitSpeechRecognition() : null;
+const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
 
 function ChatHeader({ onClose }) {
   return (
@@ -32,12 +39,6 @@ function ChatHeader({ onClose }) {
   );
 }
 
-// Move speech recognition setup outside component
-if (recognition) {
-  recognition.continuous = false;
-  recognition.lang = "en-US";
-  recognition.interimResults = false;
-}
 function TypingAnimation() {
   return (
     <div className="flex space-x-2">
@@ -47,6 +48,7 @@ function TypingAnimation() {
     </div>
   );
 }
+
 
 const getTimeSlotsForDoctor = (doctorId) => {
   const doctorTimeSlots = {
@@ -203,7 +205,6 @@ const sendMessage = async (formData) => {
     throw new Error(`Failed to send message: ${error.message}`);
   }
 };
-
 export default function ChatBot({ isOpen, onClose }) {
   const [chatHistory, setChatHistory] = useState([
     { 
@@ -230,110 +231,158 @@ export default function ChatBot({ isOpen, onClose }) {
   const [clinicType, setClinicType] = useState('Morning Clinic - Ratnamukund Clinic, Warje');
   const [availableTimeSlots, setAvailableTimeSlots] = useState([]);
   const [selectedLanguage, setSelectedLanguage] = useState("en");
-  const [userInput, setUserInput] = useState(""); // Add state for user input
+  const [userInput, setUserInput] = useState("");
+  const [voices, setVoices] = useState([]);
+  const [selectedVoice, setSelectedVoice] = useState(null);
 
-  // Update the useEffect hook to handle voice recognition properly 
   useEffect(() => {
     if (!recognition) {
       setError("Voice recognition is not supported in your browser.");
       return;
     }
-  
+
     recognitionRef.current = recognition;
-  
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = VOICE_CONFIG[selectedLanguage]?.lang || 'hi-IN';
+
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
-      setUserInput(transcript); // Update userInput state instead of directly handling
+      setUserInput(transcript);
     };
-  
+
     recognition.onend = () => {
       setIsRecording(false);
-      // Handle the transcript after recognition ends
       if (userInput) {
         handleUserInput(userInput);
-        setUserInput(""); // Clear input after handling
+        setUserInput("");
       }
     };
-  
+
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
       setError("Voice recognition failed. Please try again.");
       setIsRecording(false);
     };
-  
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
+  }, [selectedLanguage, userInput]);
+
+  useEffect(() => {
+    if (synth) {
+      const loadVoices = () => {
+        const availableVoices = synth.getVoices();
+        setVoices(availableVoices);
+        setVoiceForLanguage(selectedLanguage, availableVoices);
+      };
+      
+      synth.onvoiceschanged = loadVoices;
+      loadVoices();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (voices.length > 0) {
+      setVoiceForLanguage(selectedLanguage, voices);
+    }
+  }, [selectedLanguage, voices]);
+
+  const setVoiceForLanguage = (lang, voices) => {
+    // Use Hindi voice for Marathi and Gujarati
+    const targetLang = ['mr', 'gu'].includes(lang) ? 'hi' : lang;
+    
+    const targetVoice = voices.find(voice => 
+      voice.name === VOICE_CONFIG[targetLang]?.voiceName ||
+      voice.lang === VOICE_CONFIG[targetLang]?.lang
+    );
+    
+    const fallbackVoice = voices.find(voice => 
+      voice.lang.startsWith(targetLang)
+    );
+
+    setSelectedVoice(targetVoice || fallbackVoice || voices[0]);
+  };
+
+
+  const speak = (text) => {
+    if (synth && selectedVoice) {
+      synth.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      
+      // Force Hindi voice for Marathi and Gujarati
+      if (['mr', 'gu'].includes(selectedLanguage)) {
+        const hindiVoice = voices.find(voice => 
+          voice.name === VOICE_CONFIG.hi.voiceName
+        );
+        utterance.voice = hindiVoice || selectedVoice;
+        utterance.lang = hindiVoice?.lang || selectedVoice.lang;
+      } else {
+        utterance.voice = selectedVoice;
+        utterance.lang = selectedVoice.lang;
       }
-    };
-  }, [userInput]); // Add userInput as dependency
-  
-  // Update the toggleRecording function
+
+      utterance.rate = 0.9; // Slightly slower for better comprehension
+      utterance.pitch = 1;
+      
+      utterance.onerror = (event) => {
+        console.error('Speech synthesis error:', event.error);
+      };
+      
+      synth.speak(utterance);
+    }
+  };
+
   const toggleRecording = () => {
     if (isRecording) {
       recognitionRef.current?.stop();
     } else {
-      setUserInput(""); // Clear any existing input
+      setUserInput("");
       recognitionRef.current?.start();
     }
     setIsRecording(!isRecording);
   };
-  // Add speech synthesis utility
-const speak = (text) => {
-  if ('speechSynthesis' in window) {
-    const utterance = new SpeechSynthesisUtterance(text);
-    speechSynthesis.speak(utterance);
-  }
-};
 
-// Update handleUserInput function
-const handleUserInput = async (input) => {
-  if (!input.trim()) return;
-  
-  setIsLoading(true);
-  const newMessage = { role: "user", content: input };
-  setChatHistory(prev => [...prev, newMessage]);
+  const handleUserInput = async (input) => {
+    if (!input.trim()) return;
+    
+    setIsLoading(true);
+    const newMessage = { role: "user", content: input };
+    setChatHistory(prev => [...prev, newMessage]);
 
-  try {
-    if (bookingStep > 0 || input.toLowerCase().includes("book") || input.toLowerCase().includes("appointment")) {
-      await handleBookingFlow(input);
-    } else {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chatHistory: [...chatHistory, newMessage],
-          language: selectedLanguage
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.response) {
-        speak(data.response);
-        setChatHistory(prev => [...prev, { 
-          role: "assistant", 
-          content: data.response 
-        }]);
+    try {
+      if (bookingStep > 0 || input.toLowerCase().includes("book") || input.toLowerCase().includes("appointment")) {
+        await handleBookingFlow(input);
       } else {
-        throw new Error("No response received from server");
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chatHistory: [...chatHistory, newMessage],
+            language: selectedLanguage
+          }),
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const data = await response.json();
+        if (data.response) {
+          speak(data.response);
+          setChatHistory(prev => [...prev, { role: "assistant", content: data.response }]);
+        } else {
+          throw new Error("No response received from server");
+        }
       }
-    }
-  } catch (error) {
-    console.error('Chat error:', error);
-    const errorMsg = "Sorry, there was an error processing your request.";
-    if ('speechSynthesis' in window) {
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMsg = selectedLanguage === 'en' 
+        ? "Sorry, there was an error processing your request." 
+        : "क्षमा करा, तुमची विनंती प्रक्रिया करताना त्रुटी आली आहे.";
       speak(errorMsg);
+      setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+    } finally {
+      setIsLoading(false);
+      setUserInput("");
     }
-    setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-  } finally {
-    setIsLoading(false);
-    setUserInput("");
-  }
-};
+  };
+
 
   // Update handleBookingFlow function
 const handleBookingFlow = async (input) => {
@@ -610,7 +659,6 @@ Please enter the number (1-3) for your choice.`;
       setIsLoading(false);
     }
   };
-
   return (
     <AnimatePresence>
       {isOpen && (
@@ -627,22 +675,45 @@ Please enter the number (1-3) for your choice.`;
             ))}
             {isLoading && <TypingAnimation />}
             <div className="mt-4">
-              <FileUploadHandler onExtractedText={handleExtractedText} />
+              <FileUploadHandler onExtractedText={handleUserInput} />
             </div>
           </ScrollArea>
           <div className="p-4 border-t border-gray-200">
-            <div className="flex justify-end mb-2">
-              <select 
-                value={selectedLanguage}
-                onChange={(e) => setSelectedLanguage(e.target.value)}
-                className="p-2 border rounded-md text-sm"
-              >
-                {Object.entries(LANGUAGE_OPTIONS).map(([code, name]) => (
-                  <option key={code} value={code}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+            <div className="flex justify-between mb-2 gap-2">
+            <select 
+    value={selectedLanguage}
+    onChange={(e) => {
+      const lang = e.target.value;
+      setSelectedLanguage(lang);
+      if (recognition) {
+        // Set proper recognition language while using Hindi voice for mr/gu
+        recognition.lang = VOICE_CONFIG[lang].lang;
+      }
+    }}
+    className="p-2 border rounded-md text-sm flex-1"
+  >
+    {Object.entries(LANGUAGE_OPTIONS).map(([code, name]) => (
+      <option key={code} value={code}>{name}</option>
+    ))}
+  </select>
+              {voices.length > 0 && (
+                <select
+                  value={selectedVoice?.name}
+                  onChange={(e) => {
+                    const voice = voices.find(v => v.name === e.target.value);
+                    setSelectedVoice(voice);
+                  }}
+                  className="p-2 border rounded-md text-sm flex-1"
+                >
+                  {voices
+                    .filter(voice => voice.lang.startsWith(selectedLanguage))
+                    .map(voice => (
+                      <option key={voice.name} value={voice.name}>
+                        {voice.name.split(' - ')[0]}
+                      </option>
+                    ))}
+                </select>
+              )}
             </div>
             <div className="flex gap-2">
               <Textarea
