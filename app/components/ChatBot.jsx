@@ -445,18 +445,18 @@ const sendMessage = async (formData) => {
           to: number,
           type: "template",
           template: {
-            name: "booking_appointment",
+            name: "pict_wp",
             language: { code: "en" },
             components: [
               {
                 type: "body",
                 parameters: [
-                  { type: "text", text: formData.user_name },  // {{1}}
-                  { type: "text", text: formData.user_phone },  // {{2}}
-                  { type: "text", text: formData.date },  // {{3}}
-                  { type: "text", text: formData.time },  // {{4}}
-                  { type: "text", text: formData.doctorName }, // {{5}}
-                  // { type: "text", text: symptomText }  // {{6}}
+                  { type: "text", text: formData.user_name },      // {{1}}
+                  { type: "text", text: formData.user_phone },     // {{2}}
+                  { type: "text", text: formData.date },           // {{3}}
+                  { type: "text", text: formData.time },           // {{4}}
+                  { type: "text", text: formData.doctorName },     // {{5}}
+                  { type: "text", text: formData.symptoms || "No symptoms mentioned" }  // {{6}}
                 ]
               }
             ]
@@ -471,7 +471,7 @@ const sendMessage = async (formData) => {
       );
 
       if (response.status !== 200) {
-        throw new Error(`Failed to send message to ${number}: ${response.data.error.message}`);
+        throw new Error(`Failed to send message to ${number}`);
       }
     });
 
@@ -1014,6 +1014,8 @@ export default function ChatBot({ isOpen, onClose }) {
           }
 
           // Prepare and submit booking
+          const storedSymptoms = localStorage.getItem('currentSymptoms');
+          
           const appointmentData = {
             data: {
               UserName: bookingData.name,
@@ -1021,7 +1023,8 @@ export default function ChatBot({ isOpen, onClose }) {
               PhoneNumber: bookingData.phone,
               Time: selectedTime,
               Date: bookingData.date,
-              doctor: bookingData.doctorId
+              doctor: bookingData.doctorId,
+              symp: storedSymptoms || "No symptoms recorded"  // Add symptoms to appointment data
             }
           };
           console.log('Appointment data:', appointmentData);
@@ -1038,14 +1041,17 @@ export default function ChatBot({ isOpen, onClose }) {
             const formData = {
               user_name: bookingData.name,
               user_phone: bookingData.phone,
-              date: new Date(bookingData.date).toLocaleDateString('en-GB'), // Convert to DD/MM/YYYY format
+              date: new Date(bookingData.date).toLocaleDateString('en-GB'),
               time: selectedTime,
               doctorName: doctorName,
-              // symptoms: symptoms || "No symptoms recorded"
+              symptoms: storedSymptoms || "No symptoms recorded"  // Include symptoms in formData
             };
 
             // Send WhatsApp message
             await sendMessage(formData);
+
+            // Clear stored symptoms after successful booking
+            localStorage.removeItem('currentSymptoms');
 
             const confirmationMsg = messages.bookingSuccess;
             await speak(confirmationMsg);

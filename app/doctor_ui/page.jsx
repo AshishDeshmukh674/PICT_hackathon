@@ -115,13 +115,23 @@ const DoctorAppointments = () => {
         const matchingAppointments = appointmentsResponse.data.data;
 
         // Step 4: Update all matching appointments with the uploaded document
-        const updatePromises = matchingAppointments.map((appointment) =>
-          axios.put(`http://localhost:1337/api/appointments/${appointment.id}`, {
+        const updatePromises = matchingAppointments.map(async (appointment) => {
+          // First get the current documents
+          const currentDocs = appointment.attributes.document?.data || [];
+          
+          // Create an array of existing document IDs
+          const existingDocIds = currentDocs.map(doc => doc.id);
+          
+          // Add the new document ID to the array
+          const updatedDocIds = [...existingDocIds, fileId];
+
+          // Update the appointment with all document IDs
+          return axios.put(`http://localhost:1337/api/appointments/${appointment.id}`, {
             data: {
-              document: fileId,
+              document: updatedDocIds
             },
-          })
-        );
+          });
+        });
 
         await Promise.all(updatePromises);
 
@@ -131,17 +141,22 @@ const DoctorAppointments = () => {
 
         // Step 5: Refresh the appointments state
         setAppointments((prevAppointments) =>
-          prevAppointments.map((appointment) =>
-            matchingAppointments.find((match) => match.id === appointment.id)
-              ? {
-                  ...appointment,
-                  attributes: {
-                    ...appointment.attributes,
-                    document: uploadResponse.data[0],
-                  },
-                }
-              : appointment
-          )
+          prevAppointments.map((appointment) => {
+            const matchingAppointment = matchingAppointments.find((match) => match.id === appointment.id);
+            if (matchingAppointment) {
+              const currentDocs = appointment.attributes.document?.data || [];
+              return {
+                ...appointment,
+                attributes: {
+                  ...appointment.attributes,
+                  document: {
+                    data: [...currentDocs, uploadResponse.data[0]]
+                  }
+                },
+              };
+            }
+            return appointment;
+          })
         );
       } else {
         alert("Error uploading document.");
@@ -154,45 +169,50 @@ const DoctorAppointments = () => {
     }
   };
 
-  // Function to handle document download and display the image
+  // Modify the handleDownload function to handle multiple documents
   const handleDownload = async (documentData) => {
-    const fileData = documentData?.data;
-    if (!fileData || fileData.length === 0) {
-      console.error("Error: No file is uploaded.");
-      alert("No file is uploaded.");
-      return;
-    }
-
-    const fileUrl = fileData[0]?.attributes?.url;
-
-    if (!fileUrl) {
-      console.error("Error: File URL is not available.");
-      alert("File URL is unavailable.");
+    const files = documentData?.data;
+    if (!files || files.length === 0) {
+      console.error("Error: No files are uploaded.");
+      alert("No files are uploaded.");
       return;
     }
 
     try {
-      const response = await fetch(fileUrl);
+      // Download all files
+      for (const file of files) {
+        const fileUrl = file?.attributes?.url;
+        if (!fileUrl) {
+          console.error("Error: File URL is not available for one of the files.");
+          continue;
+        }
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const response = await fetch(fileUrl);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+
+        const downloadLink = window.document.createElement("a");
+        downloadLink.href = blobUrl;
+        downloadLink.download = `${file.attributes.name || fileUrl.split("/").pop()}`;
+        window.document.body.appendChild(downloadLink);
+        downloadLink.click();
+        window.document.body.removeChild(downloadLink);
+
+        window.URL.revokeObjectURL(blobUrl);
+        console.log("File downloaded successfully: ", fileUrl);
+
+        // Add a small delay between downloads to prevent browser issues
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
-
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-
-      const downloadLink = window.document.createElement("a");
-      downloadLink.href = blobUrl;
-      downloadLink.download = fileUrl.split("/").pop(); // Use the filename from the URL
-      window.document.body.appendChild(downloadLink);
-      downloadLink.click();
-      window.document.body.removeChild(downloadLink);
-
-      window.URL.revokeObjectURL(blobUrl);
-      console.log("File downloaded successfully: ", fileUrl);
+      alert("All documents downloaded successfully!");
     } catch (error) {
-      console.error("Error downloading the file:", error);
-      alert("Error downloading the document.");
+      console.error("Error downloading files:", error);
+      alert("Error downloading documents.");
     }
   };
 
@@ -252,17 +272,18 @@ const DoctorAppointments = () => {
                               {uploading ? "Uploading..." : "Upload Document"}
                             </button>
                           </div>
-                        ) : appointment.attributes.document ? (
+                        ) : appointment.attributes.document?.data ? (
                           <div>
                             <button
                               onClick={() => handleDownload(appointment.attributes.document)}
-                              className="text-blue-600 mr-4"
+                              className="text-blue-600 hover:text-blue-800"
                             >
-                              Download Document
+                              Download Documents ({Array.isArray(appointment.attributes.document.data) ? 
+                                appointment.attributes.document.data.length : 0})
                             </button>
                           </div>
                         ) : (
-                          "No Document"
+                          "No Documents"
                         )}
                       </td>
                     </tr>
