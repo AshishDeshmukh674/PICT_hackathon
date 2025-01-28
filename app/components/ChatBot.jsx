@@ -262,6 +262,43 @@ const convertTimeExpression = (input, language) => {
   return formattedTime;
 };
 
+// Add this constant for symptom detection
+const SYMPTOM_INDICATORS = {
+  en: ['symptom', 'feeling', 'suffering', 'pain', 'ache', 'discomfort', 'having', 'experiencing', 'hurts'],
+  hi: ['लक्षण', 'दर्द', 'तकलीफ', 'परेशानी', 'बीमारी', 'समस्या', 'महसूस', 'पीड़ा'],
+  mr: ['लक्षण', 'वेदना', 'त्रास', 'आजार', 'समस्या', 'दुखणे', 'जाणवत', 'आजारपण'],
+  gu: ['લક્ષણ', 'દર્દ', 'તકલીફ', 'બીમારી', 'સમસ્યા', 'પીડા', 'દુખાવો']
+};
+
+// Add this function to detect and extract symptoms
+const extractSymptoms = (input, language) => {
+  const indicators = SYMPTOM_INDICATORS[language] || SYMPTOM_INDICATORS.en;
+  
+  // Check if input contains any symptom indicators
+  const hasSymptomIndicator = indicators.some(indicator => 
+    input.toLowerCase().includes(indicator.toLowerCase())
+  );
+
+  if (hasSymptomIndicator) {
+    // Clean the input by removing common phrases
+    let symptomText = input;
+    const commonPhrases = {
+      en: ['i am', 'i have', 'i am having', 'suffering from', 'experiencing'],
+      hi: ['मुझे', 'मैं', 'मुझको', 'हो रहा है', 'महसूस कर रहा हूं'],
+      mr: ['मला', 'मी', 'आहे', 'होत आहे', 'जाणवत आहे'],
+      gu: ['મને', 'હું', 'છે', 'થાય છે']
+    };
+
+    (commonPhrases[language] || []).forEach(phrase => {
+      symptomText = symptomText.replace(new RegExp(phrase, 'gi'), '');
+    });
+
+    return symptomText.trim();
+    console.log(symptomText);
+  }
+  return null;
+};
+
 function ChatHeader({ onClose }) {
   return (
     <div className="flex justify-between items-center p-4 border-b border-border">
@@ -418,7 +455,8 @@ const sendMessage = async (formData) => {
                   { type: "text", text: formData.user_phone },  // {{2}}
                   { type: "text", text: formData.date },  // {{3}}
                   { type: "text", text: formData.time },  // {{4}}
-                  { type: "text", text: formData.doctorName }  // {{5}}
+                  { type: "text", text: formData.doctorName }, // {{5}}
+                  // { type: "text", text: symptomText }  // {{6}}
                 ]
               }
             ]
@@ -666,6 +704,14 @@ export default function ChatBot({ isOpen, onClose }) {
     setChatHistory(prev => [...prev, { role: "user", content: input }]);
 
     try {
+      // Check for symptoms
+      const symptoms = extractSymptoms(input, selectedLanguage);
+      if (symptoms) {
+        // Store symptoms in localStorage for use during appointment booking
+        localStorage.setItem('currentSymptoms', symptoms);
+        console.log('Symptoms stored:', symptoms);
+      }
+
       // Check if we should start booking flow
       if (input.toLowerCase().includes("book") || 
           input.toLowerCase().includes("appointment") || 
@@ -994,7 +1040,8 @@ export default function ChatBot({ isOpen, onClose }) {
               user_phone: bookingData.phone,
               date: new Date(bookingData.date).toLocaleDateString('en-GB'), // Convert to DD/MM/YYYY format
               time: selectedTime,
-              doctorName: doctorName
+              doctorName: doctorName,
+              // symptoms: symptoms || "No symptoms recorded"
             };
 
             // Send WhatsApp message
