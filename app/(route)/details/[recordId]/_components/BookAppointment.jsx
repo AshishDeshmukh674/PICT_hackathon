@@ -53,6 +53,7 @@ function BookAppointment({ doctor }) {
         const fetchBookedSlotsAndUpdateTimeSlots = async () => {
             try {
                 const dateStr = date.toLocaleDateString('en-CA');
+                console.log('Fetching booked slots for date:', dateStr);
                 const response = await GlobalApi.getDoctorAppointmentsByDate(doctor.id, dateStr);
                 const bookedTimes = response.data.data
                     ? response.data.data.map(appointment => appointment.attributes.Time)

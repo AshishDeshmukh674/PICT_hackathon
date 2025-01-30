@@ -77,6 +77,78 @@ const updateAppointmentSymptoms = (appointmentId, symptoms) =>
         }
     });
 
+// Modify the cancelAppointmentByEmailDate function
+const cancelAppointmentByEmailDate = (email, date) => {
+    // Convert date from DD/MM/YYYY to YYYY-MM-DD format
+    const [day, month, year] = date.split('/');
+    const formattedDate = `${year}-${month}-${day}`;
+    
+    // Use the email exactly as received, only encode for URL
+    const encodedEmail = encodeURIComponent(email);
+    
+    console.log('Cancellation Request:', {
+        originalEmail: email,
+        encodedEmail: encodedEmail,
+        originalDate: date,
+        formattedDate: formattedDate,
+        url: `/appointments?filters[Email][$eq]=${encodedEmail}&filters[Date][$eq]=${formattedDate}`
+    });
+
+    return axiosClient.get(`/appointments?filters[Email][$eq]=${encodedEmail}&filters[Date][$eq]=${formattedDate}`)
+        .then(async (response) => {
+            console.log('API Response:', {
+                status: response.status,
+                data: response.data,
+                appointments: response.data.data,
+                filters: {
+                    email: email, // Use original email
+                    date: formattedDate
+                }
+            });
+
+            const appointments = response.data.data;
+            
+            // Log each appointment for debugging
+            appointments.forEach(app => {
+                console.log('Found Appointment:', {
+                    id: app.id,
+                    email: app.attributes.Email,
+                    date: app.attributes.Date,
+                    exactMatch: app.attributes.Email === email && app.attributes.Date === formattedDate
+                });
+            });
+
+            if (appointments.length === 0) {
+                throw new Error('No appointment found for this email and date');
+            }
+            
+            // Delete all appointments matching the email and date
+            const deletePromises = appointments.map(appointment => {
+                console.log('Attempting to delete appointment:', {
+                    id: appointment.id,
+                    email: appointment.attributes.Email,
+                    date: appointment.attributes.Date
+                });
+                return axiosClient.delete(`/appointments/${appointment.id}`);
+            });
+            
+            return Promise.all(deletePromises);
+        })
+        .catch(error => {
+            console.error('Cancellation Error Details:', {
+                error: error.message,
+                response: error.response?.data,
+                requestDetails: {
+                    email: email,
+                    encodedEmail: encodedEmail,
+                    originalDate: date,
+                    formattedDate,
+                }
+            });
+            throw error;
+        });
+};
+
 // Exported API methods
 export default {
     getCategory,
@@ -93,4 +165,5 @@ export default {
     saveSymptoms,
     getSymptomsByEmail,
     updateAppointmentSymptoms,
+    cancelAppointmentByEmailDate,
 };

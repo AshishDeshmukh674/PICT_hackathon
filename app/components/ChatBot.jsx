@@ -67,7 +67,11 @@ Please enter the number (1-3) for your choice.`,
     invalidTimeSlot: "Please select a valid time slot from the list provided.",
     bookingSuccess: "Your appointment has been successfully booked! You will receive a confirmation message shortly.",
     bookingError: "Sorry, there was an error booking your appointment. Please try again.",
-    processingError: "Sorry, there was an error processing your booking request. Please try again."
+    processingError: "Sorry, there was an error processing your booking request. Please try again.",
+    provideEmailForCancellation: "Please provide your email to cancel the appointment.",
+    provideDateForCancellation: "Please provide the appointment date (DD/MM/YYYY).",
+    cancellationSuccess: "Your appointment has been successfully cancelled.",
+    cancellationError: "No appointment found for this email and date."
   },
   hi: {
     welcome: "नमस्ते! मैं आपका मेडिकल असिस्टेंट हूं। मैं आपकी कैसे मदद कर सकता हूं? आप अपॉइंटमेंट बुक कर सकते हैं या स्वास्थ्य संबंधी प्रश्न पूछ सकते हैं।",
@@ -91,7 +95,11 @@ Please enter the number (1-3) for your choice.`,
     invalidTimeSlot: "कृपया दी गई सूची से एक वैध समय स्लॉट चुनें।",
     bookingSuccess: "आपका अपॉइंटमेंट सफलतापूर्वक बुक कर लिया गया है! आपको जल्द ही एक पुष्टिकरण संदेश प्राप्त होगा।",
     bookingError: "क्षमा करें, आपका अपॉइंटमेंट बुक करने में एक त्रुटि हुई। कृपया पुनः प्रयास करें।",
-    processingError: "क्षमा करें, आपके बुकिंग अनुरोध को संसाधित करने में एक त्रुटि हुई। कृपया पुनः प्रयास करें।"
+    processingError: "क्षमा करें, आपके बुकिंग अनुरोध को संसाधित करने में एक त्रुटि हुई। कृपया पुनः प्रयास करें।",
+    provideEmailForCancellation: "कृपया अपना ईमेल पता दें जिसे आप अपॉइंटमेंट रद्द करना चाहते हैं।",
+    provideDateForCancellation: "कृपया अपॉइंटमेंट की तिथि दें (DD/MM/YYYY)।",
+    cancellationSuccess: "आपका अपॉइंटमेंट सफलतापूर्वक रद्द कर लिया गया है।",
+    cancellationError: "इस ईमेल और तिथि के लिए कोई अपॉइंटमेंट नहीं मिला।"
   },
   mr: {
     welcome: "नमस्कार! मी तुमचा मेडिकल असिस्टंट आहे. मी तुम्हाला कशी मदत करू शकतो? तुम्ही अपॉइंटमेंट बुक करू शकता किंवा आरोग्याशी संबंधित प्रश्न विचारू शकता.",
@@ -297,6 +305,20 @@ const extractSymptoms = (input, language) => {
     console.log(symptomText);
   }
   return null;
+};
+
+// Add these constants for cancellation keywords
+const CANCELLATION_KEYWORDS = {
+    en: ['cancel', 'delete', 'remove', 'appointment'],
+    hi: ['रद्द', 'कैंसिल', 'अपॉइंटमेंट'],
+    mr: ['रद्द', 'कॅन्सल', 'अपॉइंटमेंट'],
+    gu: ['રદ', 'કેન્સલ', 'એપોઈન્ટમેન્ટ']
+};
+
+// Add this function to check if the message is about cancellation
+const isCancellationRequest = (text, language) => {
+    const keywords = [...CANCELLATION_KEYWORDS.en, ...(CANCELLATION_KEYWORDS[language] || [])];
+    return keywords.some(keyword => text.toLowerCase().includes(keyword.toLowerCase()));
 };
 
 function ChatHeader({ onClose }) {
@@ -515,6 +537,8 @@ export default function ChatBot({ isOpen, onClose }) {
   const [selectedLanguage, setSelectedLanguage] = useState("en");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const recognitionRef = useRef(null);
+  const [cancellationStep, setCancellationStep] = useState(0);
+  const [cancellationData, setCancellationData] = useState({ email: '', date: '' });
 
   const forceLoadVoices = () => {
     return new Promise((resolve) => {
@@ -648,9 +672,31 @@ export default function ChatBot({ isOpen, onClose }) {
       setUserInput(cleanedInput);
       
       try {
-        if (bookingStep > 0) {
+        if (cancellationStep > 0) {
+          await handleCancellationFlow(cleanedInput);
+        } else if (bookingStep > 0) {
           await handleBookingFlow(cleanedInput);
+        } else if (isCancellationRequest(cleanedInput, selectedLanguage)) {
+          setCancellationStep(1);
+          const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
+          await speak(messages.provideEmailForCancellation || "Please provide your email to cancel the appointment.");
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: messages.provideEmailForCancellation || "Please provide your email to cancel the appointment."
+          }]);
+        } else if (input.toLowerCase().includes("book") || 
+                  input.toLowerCase().includes("appointment") || 
+                  input.toLowerCase().includes("अपॉइंटमेंट") || 
+                  input.toLowerCase().includes("बुक")) {
+          setBookingStep(1);
+          const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
+          await speak(messages.provideName);
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: messages.provideName 
+          }]);
         } else {
+          // Normal chat flow
           await handleUserInput(cleanedInput);
         }
       } catch (error) {
@@ -704,19 +750,32 @@ export default function ChatBot({ isOpen, onClose }) {
     setChatHistory(prev => [...prev, { role: "user", content: input }]);
 
     try {
-      // Check for symptoms
-      const symptoms = extractSymptoms(input, selectedLanguage);
-      if (symptoms) {
-        // Store symptoms in localStorage for use during appointment booking
-        localStorage.setItem('currentSymptoms', symptoms);
-        console.log('Symptoms stored:', symptoms);
-      }
+      // Clean the input text
+      const cleanedInput = cleanInputText(input);
 
-      // Check if we should start booking flow
-      if (input.toLowerCase().includes("book") || 
-          input.toLowerCase().includes("appointment") || 
-          input.toLowerCase().includes("अपॉइंटमेंट") || 
-          input.toLowerCase().includes("बुक")) {
+      // Check cancellation flow first
+      if (cancellationStep > 0) {
+        await handleCancellationFlow(cleanedInput);
+      } 
+      // Check for cancellation request before booking keywords
+      else if (isCancellationRequest(cleanedInput, selectedLanguage)) {
+        setCancellationStep(1);
+        const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
+        await speak(messages.provideEmailForCancellation);
+        setChatHistory(prev => [...prev, { 
+          role: "assistant", 
+          content: messages.provideEmailForCancellation
+        }]);
+      }
+      // Then check booking flow
+      else if (bookingStep > 0) {
+        await handleBookingFlow(cleanedInput);
+      }
+      // Then check for booking keywords
+      else if (cleanedInput.toLowerCase().includes("book") || 
+               cleanedInput.toLowerCase().includes("appointment") || 
+               cleanedInput.toLowerCase().includes("अपॉइंटमेंट") || 
+               cleanedInput.toLowerCase().includes("बुक")) {
         setBookingStep(1);
         const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
         await speak(messages.provideName);
@@ -724,16 +783,14 @@ export default function ChatBot({ isOpen, onClose }) {
           role: "assistant", 
           content: messages.provideName 
         }]);
-      } else if (bookingStep > 0) {
-        // If already in booking flow, continue with it
-        await handleBookingFlow(input);
-      } else {
-        // Normal chat flow
+      }
+      // Normal chat flow
+      else {
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
-            chatHistory: [...chatHistory, { role: "user", content: input }],
+            chatHistory: [...chatHistory, { role: "user", content: cleanedInput }],
             language: selectedLanguage
           }),
         });
@@ -742,10 +799,7 @@ export default function ChatBot({ isOpen, onClose }) {
 
         const data = await response.json();
         await speak(data.response);
-        setChatHistory(prev => [...prev, { 
-          role: "assistant", 
-          content: data.response
-        }]);
+        setChatHistory(prev => [...prev, { role: "assistant", content: data.response }]);
       }
     } catch (error) {
       console.error(error);
@@ -1171,6 +1225,83 @@ export default function ChatBot({ isOpen, onClose }) {
       }]);
     }
   }, [selectedLanguage]);
+
+  const handleCancellationFlow = async (input) => {
+    const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
+    
+    try {
+        switch(cancellationStep) {
+            case 1: // Email input
+                // Add dot after '@gmail' if missing
+                let emailInput = input.trim();
+                if (emailInput.includes('@gmail') && !emailInput.includes('@gmail.')) {
+                    emailInput = emailInput.replace('@gmailcom', '@gmail.com');
+                }
+                
+                setCancellationData(prev => ({ ...prev, email: emailInput }));
+                console.log('Stored email:', emailInput);
+                
+                setCancellationStep(2);
+                await speak(messages.provideDateForCancellation || "Please provide the appointment date (DD/MM/YYYY).");
+                setChatHistory(prev => [...prev, { 
+                    role: "assistant", 
+                    content: messages.provideDateForCancellation || "Please provide the appointment date (DD/MM/YYYY)."
+                }]);
+                break;
+
+            case 2: // Date input
+                const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+                const cleanedDate = input.trim();
+                console.log('Cancellation data:', cancellationData);
+                
+                if (!dateRegex.test(cleanedDate)) {
+                    await speak(messages.invalidDateFormat || "Please provide the date in DD/MM/YYYY format.");
+                    setChatHistory(prev => [...prev, { 
+                        role: "assistant", 
+                        content: messages.invalidDateFormat || "Please provide the date in DD/MM/YYYY format."
+                    }]);
+                    break;
+                }
+
+                try {
+                    const userEmail = cancellationData.email;
+                    console.log('Attempting to cancel appointment:', {
+                        email: userEmail,
+                        date: cleanedDate,
+                    });
+                    
+                    await GlobalApi.cancelAppointmentByEmailDate(userEmail, cleanedDate);
+                    
+                    await speak(messages.cancellationSuccess || "Your appointment has been successfully cancelled.");
+                    setChatHistory(prev => [...prev, { 
+                        role: "assistant", 
+                        content: messages.cancellationSuccess || "Your appointment has been successfully cancelled."
+                    }]);
+                } catch (error) {
+                    console.error('Cancellation error:', error);
+                    const errorMessage = error.response?.data?.error?.message || 
+                        messages.cancellationError || 
+                        "No appointment found for this email and date.";
+                    
+                    await speak(errorMessage);
+                    setChatHistory(prev => [...prev, { 
+                        role: "assistant", 
+                        content: errorMessage
+                    }]);
+                }
+                
+                // Reset cancellation flow
+                setCancellationStep(0);
+                setCancellationData({ email: '', date: '' });
+                break;
+        }
+    } catch (error) {
+        console.error('Error in cancellation flow:', error);
+        await speak(messages.processingError || "Sorry, there was an error processing your request.");
+        setCancellationStep(0);
+        setCancellationData({ email: '', date: '' });
+    }
+};
 
   return (
     <AnimatePresence>
