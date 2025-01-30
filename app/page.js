@@ -66,12 +66,18 @@ useEffect(()=>{
         </div>
       </div>
 
-      <div className="mb-10 flex justify-center">
+      <div className="mb-10 flex justify-center gap-4">
         <Link 
           href="/meetings" 
           className="bg-[#3B82F6] text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
         >
           Schedule a Meeting
+        </Link>
+        <Link 
+          href="/diet-planner" 
+          className="bg-[#22C55E] text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
+        >
+          Diet Planner
         </Link>
       </div>
     </>
