@@ -9,6 +9,7 @@ import { ChatMessage } from "./ChatMessage";
 import GlobalApi from "../_utils/GlobalApi";
 import axios from 'axios';
 import { FileUploadHandler } from "./FileUploadHandler";
+import { doctorTypes, extractDoctorType } from './doctorTypes';
 
 const LANGUAGE_OPTIONS = {
   en: "English",
@@ -799,6 +800,14 @@ export default function ChatBot({ isOpen, onClose }) {
 
         const data = await response.json();
         await speak(data.response);
+        const llmResponse =data.response;
+        const doctorType = extractDoctorType(llmResponse);
+        // console.log(doctorType); // Output: "Cardiologist"
+
+        // // Get more info about the doctor type
+        // const doctorInfo = doctorTypes[doctorType];
+        // console.log(doctorInfo.description);
+        // console.log(doctorInfo.specialties);
         setChatHistory(prev => [...prev, { role: "assistant", content: data.response }]);
       }
     } catch (error) {
