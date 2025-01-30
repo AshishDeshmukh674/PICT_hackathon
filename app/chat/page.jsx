@@ -8,17 +8,15 @@ export default function ChatPage() {
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   return (
-    <div className="relative">
+    <div>
       <Button
         onClick={() => setIsChatOpen(!isChatOpen)}
-        className="fixed bottom-4 right-4 w-14 h-14 p-0 rounded-full shadow-lg bg-primary text-white flex items-center justify-center text-2xl z-50"
+        className="fixed bottom-4 right-4 w-14 h-14 p-0 rounded-full shadow-lg bg-primary text-white flex items-center justify-center text-2xl"
       >
         {isChatOpen ? "X" : "+"}
       </Button>
 
-      <div className={`${isChatOpen ? 'z-50' : ''}`}>
-        <ChatBot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
-      </div>
+      <ChatBot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
     </div>
   );
 }
