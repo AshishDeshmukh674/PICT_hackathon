@@ -13,15 +13,17 @@ import Gallery from './_components/Gallery'
 import DoctorLogin from "./_components/doctorLogin"; // Correct path for DoctorLogin
 import Chatbot from "./chat/page"
 import Link from 'next/link'
+import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
 
 // Dynamically import MapComponent with server-side rendering disabled
 const MapComponent = dynamic(() => import('./_components/map'), { ssr: false });
 export default function Home() {
-
-const [doctorList,setDoctorList]=useState( []);
-useEffect(()=>{
-  getDoctorList();
-},[])
+  const { user } = useKindeBrowserClient();
+  const [doctorList,setDoctorList]=useState([]);
+  
+  useEffect(()=>{
+    getDoctorList();
+  },[])
 
   const getDoctorList=()=>{
     GlobalApi.getDoctorList().then(resp=>{
@@ -29,6 +31,7 @@ useEffect(()=>{
       setDoctorList(resp.data.data)
     })
   }
+
   return (
     <>
     {/* <div>
@@ -64,21 +67,6 @@ useEffect(()=>{
         <div className="fixed bottom-20 right-4 z-[1000]">
           <Chatbot />
         </div>
-      </div>
-
-      <div className="mb-10 flex justify-center gap-4">
-        <Link 
-          href="/meetings" 
-          className="bg-[#3B82F6] text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-        >
-          Schedule a Meeting
-        </Link>
-        <Link 
-          href="/diet-planner" 
-          className="bg-[#22C55E] text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
-        >
-          Diet Planner
-        </Link>
       </div>
     </>
   );

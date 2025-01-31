@@ -7,8 +7,6 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "../../../../components/ui/dropdown-menu"
 
@@ -17,8 +15,7 @@ function DashboardHeader() {
 
     return user && (
         <div className='p-4 px-10'>
-            <div >
-
+            <div>
                 <DropdownMenu>
                     <DropdownMenuTrigger className='flex items-center float-right'>
                         <Image src={user?.picture} alt='logo'
@@ -29,17 +26,11 @@ function DashboardHeader() {
                         <ChevronDown />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
-                        <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem>Profile</DropdownMenuItem>
-                        <DropdownMenuItem>Settings</DropdownMenuItem>
-
                         <DropdownMenuItem>
                             <LogoutLink>Logout</LogoutLink>
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
-
             </div>
         </div>
     )

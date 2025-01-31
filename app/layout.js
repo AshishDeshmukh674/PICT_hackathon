@@ -11,7 +11,6 @@ const outfit = Outfit({ subsets: ["latin"] });
 export default function RootLayout({ children }) {
   const pathname = usePathname();
   const isExcludedPage = [
-    '/meetings',
     '/dashboard',
     '/dashboard/meeting-type',
     '/dashboard/scheduled-meeting',

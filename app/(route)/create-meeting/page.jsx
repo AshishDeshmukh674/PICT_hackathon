@@ -2,8 +2,12 @@
 import React from "react";
 import MeetingForm from "./_components/MeetingForm";
 import PreviewMeeting from "./_components/PreviewMeeting";
+import { useSearchParams } from 'next/navigation';
 
 export default function CreateMeeting() {
+  const searchParams = useSearchParams();
+  const doctorId = searchParams.get('doctor');
+
   const [formValue, setFormValue] = React.useState({
     eventName: "",
     duration: 30,
@@ -12,6 +16,7 @@ export default function CreateMeeting() {
     themeColor: "",
     selectedDate: null,
     selectedTime: null,
+    doctorId: doctorId
   });
 
   // Add useEffect to clear localStorage on component mount

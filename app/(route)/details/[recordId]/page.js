@@ -1,11 +1,15 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import GlobalApi from '/app/_utils/GlobalApi.jsx';
+import GlobalApi from '../../../_utils/GlobalApi';
+import Image from 'next/image';
+import { Youtube, Linkedin, Twitter, Facebook } from 'lucide-react';
+import BookAppointment from './_components/BookAppointment';
 import DoctorDetail from '/app/(route)/details/[recordId]/_components/DoctorDetail.jsx';
 
-function Details({ params }) {
+function DoctorDetails({ params }) {
   const [doctor, setDoctor] = useState(null);
+  const recordId = React.use(params).recordId;
 
   useEffect(() => {
     getDoctorById();
@@ -13,7 +17,7 @@ function Details({ params }) {
 
   const getDoctorById = async () => {
     try {
-      const resp = await GlobalApi.getDoctorById(params.recordId);
+      const resp = await GlobalApi.getDoctorById(recordId);
       setDoctor(resp.data.data);
     } catch (error) {
       console.error("Failed to fetch doctor details:", error);
@@ -40,6 +44,6 @@ function Details({ params }) {
   );
 }
 
-export default Details;
+export default DoctorDetails;
 
 

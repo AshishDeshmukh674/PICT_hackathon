@@ -6,13 +6,13 @@ import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 export async function middleware(request) {
     const { isAuthenticated } = getKindeServerSession();
     if (!(await isAuthenticated())) {
-        // redirect("/api/auth/login");
-        return NextResponse.redirect(new URL('/api/auth/login?post_login_redirect_url=/dashboard', request.url))
-
-      }
+        const redirectUrl = new URL('/api/auth/login', request.url);
+        redirectUrl.searchParams.set('post_login_redirect_url', '/dashboard');
+        return NextResponse.redirect(redirectUrl);
+    }
 }
  
 // See "Matching Paths" below to learn more
 export const config = {
-  matcher: ['/dashboard/:path*','/create-business'],
+  matcher: ['/dashboard/:path*', '/create-business', '/meetings'],
 }

@@ -5,13 +5,42 @@ import Image from "next/image";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
+import GlobalApi from '../../../_utils/GlobalApi';
+import { useSearchParams } from 'next/navigation';
+import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import { app } from '../../../config/FirebaseConfig';
 
 function PreviewMeeting({ formValue, setFormValue }) {
   const [mounted, setMounted] = useState(false);
   const [date, setDate] = useState(new Date());
   const [timeSlots, setTimeSlots] = useState([]);
   const [selectedTime, setSelectedTime] = useState(null);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [doctorSlots, setDoctorSlots] = useState(null);
+  const [clinicType, setClinicType] = useState('Morning Clinic');
+  const [doctorId, setDoctorId] = useState(null);
+  const searchParams = useSearchParams();
+  const db = getFirestore(app);
+
+  const getTimeSlotsForDoctor = (doctorId) => {
+    const doctorTimeSlots = {
+      '3': { morning: [[8, 30], [9, 30]], evening: [[19, 30], [20, 30]] },
+      '4': { 
+        morning: [[8, 0], [9, 0]], 
+        evening: [[11, 0], [1, 0]],
+        AfterNoon: [[9, 0], [11, 0]]
+      },
+      '5': {
+        morning: [[8, 30], [11, 0]], 
+        evening: [[19, 0], [21, 0]]
+      },
+      '7': { morning: [[8, 0], [10, 45]] },
+    };
+    return doctorTimeSlots[doctorId] || { morning: [[9, 0], [12, 0]], evening: [[13, 0], [18, 0]] };
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -21,37 +50,114 @@ function PreviewMeeting({ formValue, setFormValue }) {
     if (savedDate) setDate(new Date(savedDate));
     if (savedTime) setSelectedTime(savedTime);
 
-    if (formValue?.duration) {
-      createTimeSlot(formValue?.duration);
-    }
-
     // Add console.log to debug formValue
     console.log("Current formValue:", formValue);
-  }, [formValue]);
+  }, []);
+
+  // Add this useEffect to get doctor ID from URL
+  useEffect(() => {
+    const id = searchParams.get('doctorId');
+    if (id) {
+      setDoctorId(id);
+      setFormValue(prev => ({...prev, doctorId: id}));
+    }
+  }, [searchParams]);
+
+  // Add new useEffect for fetching booked slots
+  useEffect(() => {
+    const fetchBookedSlotsAndUpdateTimeSlots = async () => {
+      try {
+        const dateStr = date.toLocaleDateString('en-CA');
+        console.log('Fetching booked slots for date:', dateStr);
+        const response = await GlobalApi.getDoctorAppointmentsByDate(doctorId, dateStr);
+        const bookedTimes = response.data.data
+          ? response.data.data.map(appointment => appointment.attributes.Time)
+          : [];
+        
+        // Update time slots excluding booked ones
+        createTimeSlot(formValue?.duration || 30, bookedTimes);
+      } catch (error) {
+        console.error("Failed to fetch booked slots:", error.response ? error.response.data : error.message);
+      }
+    };
+
+    if (date && clinicType && doctorId) {
+      fetchBookedSlotsAndUpdateTimeSlots();
+    }
+  }, [date, clinicType, doctorId]);
 
   /**
    * Creates time slots based on interval
    * @param {*} interval
    */
-  const createTimeSlot = (interval) => {
-    const startTime = 8 * 60; // 8 AM in minutes
-    const endTime = 22 * 60; // 10 PM in minutes
-    const totalSlots = (endTime - startTime) / interval;
-    const slots = Array.from({ length: totalSlots }, (_, i) => {
-      const totalMinutes = startTime + i * interval;
-      const hours = Math.floor(totalMinutes / 60);
-      const minutes = totalMinutes % 60;
-      const formattedHours = hours > 12 ? hours - 12 : hours; // Convert to 12-hour format
-      const period = hours >= 12 ? "PM" : "AM";
-      return {
-        time: `${String(formattedHours).padStart(2, "0")}:${String(
-          minutes
-        ).padStart(2, "0")} ${period}`,
-        minutes: totalMinutes,
-      };
-    });
+  const createTimeSlot = (interval, bookedSlots = []) => {
+    if (!doctorId) return;
 
-    setTimeSlots(slots);
+    const timeList = [];
+    const clinicTypeOnly = clinicType.split(" - ")[0];
+    const { morning, evening, AfterNoon } = getTimeSlotsForDoctor(doctorId);
+
+    const isToday = isSameDay(date, new Date());
+    const isTomorrow = isSameDay(date, new Date(Date.now() + 24 * 60 * 60 * 1000));
+    const now = new Date();
+    const dayOfWeek = date.getDay();
+
+    if (dayOfWeek === 0 || isTomorrow) {
+      setTimeSlots([]);
+      return;
+    }
+
+    const generateTimeSlots = (startTime, endTime) => {
+      let [currentHour, currentMinutes] = startTime;
+      const [endHour, endMinutes] = endTime;
+
+      while (currentHour < endHour || (currentHour === endHour && currentMinutes < endMinutes)) {
+        const slotTime = new Date(date);
+        slotTime.setHours(currentHour, currentMinutes);
+
+        if (isToday && slotTime <= now) {
+          currentMinutes += interval;
+          if (currentMinutes >= 60) {
+            currentHour += Math.floor(currentMinutes / 60);
+            currentMinutes = currentMinutes % 60;
+          }
+          continue;
+        }
+
+        const formattedTime = formatTime(slotTime);
+        if (!bookedSlots.includes(formattedTime)) {
+          timeList.push(formattedTime);
+        }
+
+        currentMinutes += interval;
+        if (currentMinutes >= 60) {
+          currentHour += Math.floor(currentMinutes / 60);
+          currentMinutes = currentMinutes % 60;
+        }
+      }
+    };
+
+    // Special case for doctor ID 5
+    if (doctorId === '5') {
+      if (clinicTypeOnly === 'Morning Clinic' && (dayOfWeek === 1 || dayOfWeek === 6)) {
+        generateTimeSlots(morning[0], morning[1]);
+      } else if (clinicTypeOnly === 'Evening Clinic' && dayOfWeek === 4) {
+        generateTimeSlots(evening[0], evening[1]);
+      } else {
+        setTimeSlots([]);
+        return;
+      }
+    } else {
+      if (clinicTypeOnly === 'Morning Clinic' && morning) {
+        generateTimeSlots(morning[0], morning[1]);
+      } else if (clinicTypeOnly === 'Evening Clinic' && evening) {
+        generateTimeSlots(evening[0], evening[1]);
+      } else if (clinicTypeOnly === 'AfterNoon Clinic' && AfterNoon) {
+        generateTimeSlots(AfterNoon[0], AfterNoon[1]);
+      }
+    }
+
+    setTimeSlots(timeList);
   };
 
   /**
@@ -107,26 +213,27 @@ function PreviewMeeting({ formValue, setFormValue }) {
   };
 
   const handleShare = async (platform) => {
-    // Debug log
-    console.log("Sharing formValue:", formValue);
-
-    // Get meeting URL from localStorage as backup if formValue.locationUrl is undefined
-    const meetingUrl =
-      formValue?.locationUrl || localStorage.getItem("locationUrl");
-    const eventName =
-      formValue?.eventName ||
-      localStorage.getItem("eventName") ||
-      "New Meeting";
-
-    if (!meetingUrl) {
-      toast.error("No meeting URL available to share");
-      return;
-    }
-
-    const eventDetails = `Join my meeting: ${eventName}`;
-    const shareText = `${eventDetails}\n\nMeeting Link: ${meetingUrl}`;
-
     try {
+
+      // Debug log
+      console.log("Sharing formValue:", formValue);
+
+      // Get meeting URL from localStorage as backup if formValue.locationUrl is undefined
+      const meetingUrl =
+        formValue?.locationUrl || localStorage.getItem("locationUrl");
+      const eventName =
+        formValue?.eventName ||
+        localStorage.getItem("eventName") ||
+        "New Meeting";
+
+      if (!meetingUrl) {
+        toast.error("No meeting URL available to share");
+        return;
+      }
+
+      const eventDetails = `Join my meeting: ${eventName}`;
+      const shareText = `${eventDetails}\n\nMeeting Link: ${meetingUrl}`;
+
       switch (platform) {
         case "whatsapp":
           window.open(
@@ -171,8 +278,8 @@ function PreviewMeeting({ formValue, setFormValue }) {
           }
       }
     } catch (error) {
-      console.error("Error sharing:", error);
-      toast.error("Failed to share meeting details");
+      console.error("Error saving meeting:", error);
+      toast.error("Failed to save meeting details");
     }
   };
 
@@ -182,14 +289,49 @@ function PreviewMeeting({ formValue, setFormValue }) {
 
   const handlePreviousMonth = () => {
     const newDate = new Date(currentMonth);
-    newDate.setMonth(currentMonth.getMonth() - 1);
-    setCurrentMonth(newDate);
+    newDate.setMonth(currentMonth.getMonth() - 1, 1);
+    const today = new Date();
+    if (newDate >= new Date(today.getFullYear(), today.getMonth(), 1)) {
+      setCurrentMonth(newDate);
+    }
   };
 
   const handleNextMonth = () => {
     const newDate = new Date(currentMonth);
-    newDate.setMonth(currentMonth.getMonth() + 1);
-    setCurrentMonth(newDate);
+    newDate.setMonth(currentMonth.getMonth() + 1, 1);
+    const maxDate = new Date();
+    maxDate.setFullYear(maxDate.getFullYear() + 1);
+    if (newDate <= maxDate) {
+      setCurrentMonth(newDate);
+    }
+  };
+
+  // Add these helper functions near the top of the component
+  const isSameDay = (d1, d2) => {
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth() === d2.getMonth() &&
+           d1.getDate() === d2.getDate();
+  };
+
+  const formatTime = (date) => {
+    let hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours || 12;
+    const minutesStr = minutes < 10 ? `0${minutes}` : minutes;
+    return `${hours}:${minutesStr} ${ampm}`;
+  };
+
+  // Update the clinic type change handler
+  const handleClinicTypeChange = (e) => {
+    setClinicType(e.target.value);
+    // Clear selected time when clinic type changes
+    setSelectedTime(null);
+    localStorage.removeItem("selectedTime");
+    if (setFormValue) {
+      setFormValue((prev) => ({ ...prev, selectedTime: null }));
+    }
   };
 
   // If not mounted yet, return null or a loading state
@@ -270,6 +412,17 @@ function PreviewMeeting({ formValue, setFormValue }) {
             <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
               <div className="flex flex-col space-y-4">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3">
+                  {/* Add Clinic Type Selection */}
+                  <select
+                    value={clinicType}
+                    onChange={handleClinicTypeChange}
+                    className="w-full p-2 border rounded-md mb-4"
+                  >
+                    <option value="Morning Clinic">Morning Clinic</option>
+                    <option value="Evening Clinic">Evening Clinic</option>
+                    <option value="AfterNoon Clinic">Afternoon Clinic</option>
+                  </select>
+
                   <Calendar
                     mode="single"
                     selected={date}
@@ -278,12 +431,15 @@ function PreviewMeeting({ formValue, setFormValue }) {
                     onMonthChange={handleMonthChange}
                     className="rounded-lg w-full max-w-[350px]"
                     disabled={(d) => d < new Date().setHours(0, 0, 0, 0)}
+                    showOutsideDays={false}
+                    fixedWeeks={true}
+                    ISOWeek={true}
                     classNames={{
                       months: "flex flex-col space-y-4",
                       month: "space-y-4",
                       caption: "flex justify-center relative items-center h-10",
                       caption_label: "text-sm font-medium",
-                      nav: "hidden", // Hide the default navigation
+                      nav: "hidden",
                       table: "w-full border-collapse space-y-1",
                       head_row: "flex justify-between",
                       head_cell: "text-gray-500 font-medium text-sm w-9 h-9",
@@ -292,7 +448,7 @@ function PreviewMeeting({ formValue, setFormValue }) {
                       day: "h-9 w-9 p-0 font-normal hover:bg-gray-100 rounded-lg transition-colors",
                       day_selected: "bg-blue-600 text-white hover:bg-blue-700 hover:text-white focus:bg-blue-600 focus:text-white rounded-lg",
                       day_today: "bg-gray-50 text-gray-900 rounded-lg font-semibold",
-                      day_outside: "text-gray-400 opacity-50",
+                      day_outside: "hidden",
                       day_disabled: "text-gray-400 opacity-50 cursor-not-allowed",
                       day_hidden: "invisible",
                     }}
@@ -305,7 +461,14 @@ function PreviewMeeting({ formValue, setFormValue }) {
                     variant="outline"
                     size="sm"
                     className="text-gray-600 hover:text-gray-900"
-                    onClick={handlePreviousMonth}
+                    onClick={() => {
+                      const newDate = new Date(currentMonth);
+                      newDate.setMonth(currentMonth.getMonth() - 1, 1);
+                      const today = new Date();
+                      if (newDate >= new Date(today.getFullYear(), today.getMonth(), 1)) {
+                        setCurrentMonth(newDate);
+                      }
+                    }}
                   >
                     Previous Month
                   </Button>
@@ -313,7 +476,15 @@ function PreviewMeeting({ formValue, setFormValue }) {
                     variant="outline"
                     size="sm"
                     className="text-gray-600 hover:text-gray-900"
-                    onClick={handleNextMonth}
+                    onClick={() => {
+                      const newDate = new Date(currentMonth);
+                      newDate.setMonth(currentMonth.getMonth() + 1, 1);
+                      const maxDate = new Date();
+                      maxDate.setFullYear(maxDate.getFullYear() + 1);
+                      if (newDate <= maxDate) {
+                        setCurrentMonth(newDate);
+                      }
+                    }}
                   >
                     Next Month
                   </Button>
@@ -322,29 +493,26 @@ function PreviewMeeting({ formValue, setFormValue }) {
 
               <div className="min-w-[200px] max-w-[280px] lg:max-h-[450px]">
                 <div className="grid grid-cols-1 gap-2 max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-gray-50 pr-2">
-                  {timeSlots?.map(({ time, minutes }, index) => {
-                    const isDisabled = isTimeSlotDisabled(minutes);
-                    return (
+                  {timeSlots?.length > 0 ? (
+                    timeSlots.map((time, index) => (
                       <Button
                         key={index}
                         className={`w-full justify-center text-sm font-medium transition-all duration-200 rounded-lg
-                          ${
-                            selectedTime === time
-                              ? "bg-blue-600 text-white hover:bg-blue-700 shadow-md"
-                              : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"
-                          } ${
-                          isDisabled
-                            ? "opacity-50 cursor-not-allowed bg-gray-50"
-                            : ""
-                        }`}
+                          ${selectedTime === time
+                            ? "bg-blue-600 text-white hover:bg-blue-700 shadow-md"
+                            : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"
+                          }`}
                         variant={selectedTime === time ? "default" : "outline"}
-                        disabled={isDisabled}
-                        onClick={() => handleTimeSlotClick({ time, minutes })}
+                        onClick={() => handleTimeSlotClick({ time, minutes: 0 })}
                       >
                         {time}
                       </Button>
-                    );
-                  })}
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">
+                      No available time slots for selected date
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

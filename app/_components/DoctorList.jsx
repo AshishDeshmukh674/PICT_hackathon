@@ -2,13 +2,16 @@
 import React from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
 
 function DoctorList({ doctorList }) {
+  const { user } = useKindeBrowserClient();
+
   return (
     <div className='mb-10 px-8'>
       <h2 className="text-2xl ml:3xl md:text-3xl lg:text-4xl font-bold text-left mb-4 lg:mb-6 underline underline-offset-4 decoration-4 decoration-black text-blue-700">
-  Book Appointment...
-</h2>
+        Book Appointment...
+      </h2>
       {/* Responsive grid: 1 doctor per row on small screens, 2 on medium, 3 on large */}
       <div className='grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7'>
         {doctorList.length > 0 ? doctorList.map((doctor, index) => (
@@ -50,6 +53,21 @@ function DoctorList({ doctorList }) {
                   Book Now
                 </h2>
               </Link>
+              {user ? (
+                <Link 
+                  href={`/create-meeting?doctorId=${doctor?.id}`}
+                  className="mt-4 py-2 bg-primary text-white text-sm rounded-full w-full text-center transition-colors duration-300 hover:bg-blue-700"
+                >
+                  Schedule a Meeting
+                </Link>
+              ) : (
+                <Link 
+                  href={`/api/auth/login?post_login_redirect_url=/create-meeting?doctorId=${doctor?.id}`}
+                  className="mt-4 py-2 bg-primary text-white text-sm rounded-full w-full text-center transition-colors duration-300 hover:bg-blue-700"
+                >
+                  Login to Schedule Meeting
+                </Link>
+              )}
             </div>
           </div>
         )) : (

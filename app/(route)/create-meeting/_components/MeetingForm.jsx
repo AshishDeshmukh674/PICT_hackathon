@@ -38,6 +38,7 @@ function MeetingForm({ setFormValue }) {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
   const [locationInputUrl, setLocationInputUrl] = useState("");
+  const [doctorId, setDoctorId] = useState(null);
 
 
   const isBrowser = typeof window !== "undefined";
@@ -87,6 +88,17 @@ function MeetingForm({ setFormValue }) {
     setFormValue,
   ]);
 
+  // Add this useEffect to get doctorId from URL
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const id = urlParams.get('doctorId');
+      if (id) {
+        setDoctorId(id);
+      }
+    }
+  }, []);
+
   const clearMeetingDetails = () => {
     if (!isBrowser) return;
 
@@ -103,6 +115,7 @@ function MeetingForm({ setFormValue }) {
     setLocationType("");
     setLocationUrl("");
     setThemeColor("");
+    localStorage.removeItem("clinicType"); // Clear clinic type
   };
 
   const handleZoomAuth = async (authCode) => {
@@ -246,19 +259,21 @@ function MeetingForm({ setFormValue }) {
     }
   };
 
-  // Update the isFormValid function to not require themeColor
+  // Update the isFormValid function
   const isFormValid = () => {
     const requiredFields = {
       eventName: !!eventName?.trim(),
       duration: !!duration,
       locationType: !!locationType,
       locationUrl: !!locationUrl?.trim(),
-      selectedDate: isBrowser ? !!localStorage.getItem("selectedDate") : false,
-      selectedTime: isBrowser ? !!localStorage.getItem("selectedTime") : false,
+      selectedDate: !!localStorage.getItem("selectedDate"),
+      selectedTime: !!localStorage.getItem("selectedTime"),
     };
 
     // Log validation status for debugging
     console.log("Form validation:", requiredFields);
+    console.log("Selected Date:", localStorage.getItem("selectedDate"));
+    console.log("Selected Time:", localStorage.getItem("selectedTime"));
 
     return Object.values(requiredFields).every((field) => field === true);
   };
@@ -271,18 +286,26 @@ function MeetingForm({ setFormValue }) {
 
     try {
       const id = Date.now().toString();
+      // Get the clinic slot type from localStorage
+      const selectedDate = localStorage.getItem("selectedDate");
+      const selectedTime = localStorage.getItem("selectedTime");
+      const clinicSlot = localStorage.getItem("clinicType") || "Morning Clinic"; // Default to Morning Clinic if not set
+
       await setDoc(doc(db, "MeetingEvent", id), {
         id: id,
         eventName: eventName,
         duration: duration,
         locationType: locationType,
         locationUrl: locationUrl,
-        themeColor: themeColor,
         selectedDate: selectedDate,
         selectedTime: selectedTime,
+        themeColor: themeColor,
         businessId: doc(db, "Business", user?.email),
         createdBy: user?.email,
         createdAt: new Date().toISOString(),
+        doctorId: doctorId,
+        clinicSlot: clinicSlot, // Add clinic slot type
+        clinicTiming: getClinicTiming(doctorId, clinicSlot) // Add clinic timing
       });
 
       toast.success("New Meeting Event Created!");
@@ -292,6 +315,36 @@ function MeetingForm({ setFormValue }) {
       console.error("Error creating meeting:", error);
       toast.error("Failed to create meeting");
     }
+  };
+
+  // Add helper function to get clinic timing based on doctor and slot
+  const getClinicTiming = (doctorId, clinicSlot) => {
+    const doctorTimeSlots = {
+      '3': { 
+        'Morning Clinic': '8:30 AM - 9:30 AM', 
+        'Evening Clinic': '7:30 PM - 8:30 PM' 
+      },
+      '4': { 
+        'Morning Clinic': '8:00 AM - 9:00 AM',
+        'Evening Clinic': '11:00 AM - 1:00 PM',
+        'AfterNoon Clinic': '9:00 AM - 11:00 AM'
+      },
+      '5': {
+        'Morning Clinic': '8:30 AM - 11:00 AM',
+        'Evening Clinic': '7:00 PM - 9:00 PM'
+      },
+      '7': { 
+        'Morning Clinic': '8:00 AM - 10:45 AM' 
+      }
+    };
+
+    // Default timings if doctor not found
+    const defaultTimings = {
+      'Morning Clinic': '9:00 AM - 12:00 PM',
+      'Evening Clinic': '1:00 PM - 6:00 PM'
+    };
+
+    return doctorTimeSlots[doctorId]?.[clinicSlot] || defaultTimings[clinicSlot] || 'Timing not specified';
   };
 
   return (

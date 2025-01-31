@@ -182,6 +182,9 @@ function Header() {
                     <Link href="/my-booking">My Booking</Link>
                   </li>
                   <li className="cursor-pointer hover:bg-gray-100 p-2 rounded-md text-gray-800 hover:text-primary transition duration-300 ease-in-out">
+                    <Link href="/diet-planner">Diet Planner</Link>
+                  </li>
+                  <li className="cursor-pointer hover:bg-gray-100 p-2 rounded-md text-gray-800 hover:text-primary transition duration-300 ease-in-out">
                     <LogoutLink>Log Out</LogoutLink>
                   </li>
                 </ul>
