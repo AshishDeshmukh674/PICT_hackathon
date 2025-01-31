@@ -168,8 +168,14 @@ function BookAppointment({ doctor }) {
             setLoading(false);
             return;
         }
+
+        if (!date) {
+            setSuccessMessage('Please select a date.');
+            setLoading(false);
+            return;
+        }
     
-        const dateStr = date.toLocaleDateString('en-CA'); // This will be used for internal data
+        const dateStr = date.toLocaleDateString('en-CA'); // Now date is guaranteed to exist
     
         // Fetch the latest booked slots before saving the booking
         try {

@@ -1,6 +1,6 @@
 "use client";
 
-import GlobalApi from '@/app/_utils/GlobalApi';
+import GlobalApi from '../../../_utils/GlobalApi';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link'; // Import Link from 'next/link'
 import Image from 'next/image'; // Import Image from 'next/image'
@@ -14,7 +14,7 @@ import {
   CommandList,
   CommandSeparator,
   CommandShortcut,
-} from "@/components/ui/command";
+} from "../../../../components/ui/command";
 import { usePathname } from 'next/navigation';
 
 function CategoryList() {

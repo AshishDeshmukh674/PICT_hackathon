@@ -5,7 +5,7 @@ function Footer() {
     <footer className="bg-gray-100">
     <div className="mx-auto max-w-5xl    justify-center   text-center   flex flex-col   items-center  px-4 py-16 sm:px-6 lg:px-8">
     <Image src='/logo.png' alt='logo' width={150} height={70} />
-    <span className=' text-red-600 text-md font-semibold mt-2'>Ratnamukund HealthCare Foundation</span>
+    {/* <span className=' text-red-600 text-md font-semibold mt-2'>Ratnamukund HealthCare Foundation</span> */}
   
       <p className="mx-auto mt-6 max-w-md text-center leading-relaxed text-gray-500">
       At our hospital, we believe that exceptional care is more than just treatment-its a commitment to improving lives through compassion, innovation, and excellence in healthcare.

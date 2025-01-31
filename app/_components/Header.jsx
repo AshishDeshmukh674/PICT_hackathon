@@ -137,7 +137,7 @@ function Header() {
         <div className="flex items-center gap-20">
           <div className="flex flex-col items-center">
             <Image src="/logo.png" alt="logo" width={150} height={70} />
-            <span className="text-red-600 text-md font-semibold mt-2">Ratnamukund HealthCare Foundation</span>
+            {/* <span className="text-red-600 text-md font-semibold mt-2">Ratnamukund HealthCare Foundation</span> */}
           </div>
 
           <nav className="hidden md:flex space-x-6 gap-10">
