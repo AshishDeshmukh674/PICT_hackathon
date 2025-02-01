@@ -113,9 +113,6 @@ function ScheduledMeeting() {
                     <h3 className="font-semibold text-xl">
                       {meeting.eventName}
                     </h3>
-                    <button className="p-2 hover:bg-gray-100 rounded-full">
-                      <Settings size={20} />
-                    </button>
                   </div>
                   <div className="mt-4 space-y-3">
                     <div className="flex items-center gap-2">
@@ -129,20 +126,6 @@ function ScheduledMeeting() {
                     <div className="flex items-center gap-2 text-gray-500">
                       <span>{new Date(meeting.selectedDate).toLocaleDateString()}</span>
                       <span>{meeting.selectedTime}</span>
-                    </div>
-                    <div className="flex gap-3">
-                      <button
-                        className="text-primary flex items-center gap-2"
-                        onClick={() => {
-                          navigator.clipboard.writeText(meeting.locationUrl);
-                        }}
-                      >
-                        <Link2 size={18} />
-                        Copy Link
-                      </button>
-                      <button className="ml-auto text-primary border border-primary px-4 py-1 rounded-full">
-                        Share
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -170,9 +153,6 @@ function ScheduledMeeting() {
                     <h3 className="font-semibold text-xl">
                       {meeting.eventName}
                     </h3>
-                    <button className="p-2 hover:bg-gray-100 rounded-full">
-                      <Settings size={20} />
-                    </button>
                   </div>
                   <div className="mt-4 space-y-3">
                     <div className="flex items-center gap-2">
@@ -186,20 +166,6 @@ function ScheduledMeeting() {
                     <div className="flex items-center gap-2 text-gray-500">
                       <span>{new Date(meeting.selectedDate).toLocaleDateString()}</span>
                       <span>{meeting.clinicTiming}</span>
-                    </div>
-                    <div className="flex gap-3">
-                      <button
-                        className="text-primary flex items-center gap-2"
-                        onClick={() => {
-                          navigator.clipboard.writeText(meeting.locationUrl);
-                        }}
-                      >
-                        <Link2 size={18} />
-                        Copy Link
-                      </button>
-                      <button className="ml-auto text-primary border border-primary px-4 py-1 rounded-full">
-                        Share
-                      </button>
                     </div>
                   </div>
                 </div>

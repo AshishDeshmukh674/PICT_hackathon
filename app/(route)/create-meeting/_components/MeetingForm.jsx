@@ -39,6 +39,7 @@ function MeetingForm({ setFormValue }) {
   const [selectedTime, setSelectedTime] = useState(null);
   const [locationInputUrl, setLocationInputUrl] = useState("");
   const [doctorId, setDoctorId] = useState(null);
+  const [clinicType, setClinicType] = useState('Morning Clinic');
 
 
   const isBrowser = typeof window !== "undefined";
@@ -172,14 +173,16 @@ function MeetingForm({ setFormValue }) {
     const state = Math.random().toString(36).substring(7);
     localStorage.setItem("zoom_auth_state", state);
 
-    // Get current doctorId from URL
+    // Get current doctorId from URL and current clinic type
     const urlParams = new URLSearchParams(window.location.search);
     const doctorId = urlParams.get("doctorId");
+    const currentClinicType = localStorage.getItem("clinicType") || clinicType;
 
-    // Store doctorId in localStorage to preserve it through auth flow
+    // Store values to preserve through auth flow
     if (doctorId) {
       localStorage.setItem("temp_doctor_id", doctorId);
     }
+    localStorage.setItem("temp_clinic_type", currentClinicType);
 
     // Construct Zoom OAuth URL
     const zoomAuthUrl = `https://zoom.us/oauth/authorize?response_type=code&client_id=${ZOOM_CLIENT_ID}&redirect_uri=${encodeURIComponent(
@@ -197,14 +200,22 @@ function MeetingForm({ setFormValue }) {
       const code = urlParams.get("code");
       const state = urlParams.get("state");
       const storedState = localStorage.getItem("zoom_auth_state");
-      const storedDoctorId = localStorage.getItem("temp_doctor_id"); // Get stored doctorId
+      const storedDoctorId = localStorage.getItem("temp_doctor_id");
+      const storedClinicType = localStorage.getItem("temp_clinic_type");
 
       if (code && state && state === storedState) {
-        // Clear the state from storage
+        // Clear the stored values
         localStorage.removeItem("zoom_auth_state");
-        localStorage.removeItem("temp_doctor_id"); // Clean up stored doctorId
+        localStorage.removeItem("temp_doctor_id");
+        localStorage.removeItem("temp_clinic_type");
 
-        // Handle the authorization code with preserved doctorId
+        // Restore clinic type
+        if (storedClinicType) {
+          localStorage.setItem("clinicType", storedClinicType);
+          setClinicType(storedClinicType);
+        }
+
+        // Handle the authorization code
         await handleZoomAuth(code, storedDoctorId);
       }
     };
@@ -273,6 +284,8 @@ function MeetingForm({ setFormValue }) {
 
   // Update the isFormValid function
   const isFormValid = () => {
+    if (typeof window === 'undefined') return false;
+
     const requiredFields = {
       eventName: !!eventName?.trim(),
       duration: !!duration,

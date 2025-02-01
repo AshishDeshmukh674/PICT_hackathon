@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import GlobalApi from "../_utils/GlobalApi";
+import { getFirestore, collection, getDocs } from "firebase/firestore";
+import { app } from "../_utils/firebase";
 
 const DoctorAppointments = () => {
   const [loggedInDoctor, setLoggedInDoctor] = useState(""); // To store the logged-in doctor's name
@@ -11,6 +13,8 @@ const DoctorAppointments = () => {
   const [uploading, setUploading] = useState(false); // To show uploading state
   const [previewUrl, setPreviewUrl] = useState(null); // To store file preview URL
   const [patientSymptoms, setPatientSymptoms] = useState({});
+  const [meetingEvents, setMeetingEvents] = useState([]);
+  const [doctorId, setDoctorId] = useState(null);
 
   // Fetch doctor's name from localStorage when the component mounts
   useEffect(() => {
@@ -79,6 +83,80 @@ const DoctorAppointments = () => {
 
     if (loggedInDoctor) fetchAppointmentsAndSymptoms();
   }, [loggedInDoctor]);
+
+  // Add this useEffect to get doctor's ID from Strapi
+  useEffect(() => {
+    const getDoctorId = async () => {
+      if (!loggedInDoctor) return;
+      
+      try {
+        const response = await axios.get(`http://localhost:1337/api/doctors`, {
+          params: {
+            "filters[Name][$eq]": loggedInDoctor
+          }
+        });
+        
+        if (response.data.data && response.data.data.length > 0) {
+          const id = response.data.data[0].id.toString();
+          console.log('Found doctor ID:', id);
+          setDoctorId(id);
+        }
+      } catch (error) {
+        console.error("Error fetching doctor ID:", error);
+      }
+    };
+
+    getDoctorId();
+  }, [loggedInDoctor]);
+
+  // Modify the existing fetchMeetingEvents function
+  useEffect(() => {
+    const fetchMeetingEvents = async () => {
+      if (!loggedInDoctor || !doctorId) {
+        console.log('No doctor logged in or ID not found, skipping Firebase fetch');
+        return;
+      }
+      
+      try {
+        console.log('Attempting to connect to Firebase...', {
+          projectId: "pict-hackathon-2e532",
+          collection: "MeetingEvent",
+          doctorId: doctorId
+        });
+        
+        const db = getFirestore(app);
+        const meetingCollection = collection(db, "MeetingEvent");
+        const querySnapshot = await getDocs(meetingCollection);
+        
+        const events = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          // Only include meetings where doctorId matches the doctor's ID from Strapi
+          if (data.doctorId === doctorId) {
+            console.log('Found matching meeting:', doc.id);
+            events.push({
+              id: doc.id,
+              ...data
+            });
+          }
+        });
+        
+        console.log('Filtered events for doctor:', events);
+        setMeetingEvents(events);
+        
+      } catch (error) {
+        console.error("Firebase Error Details:", {
+          name: error.name,
+          code: error.code,
+          message: error.message,
+          stack: error.stack,
+          path: error?.path || 'No path available'
+        });
+      }
+    };
+
+    fetchMeetingEvents();
+  }, [loggedInDoctor, doctorId]); // Added doctorId as dependency
 
   // Handle file input change
   const handleFileChange = (e) => {
@@ -292,6 +370,54 @@ const DoctorAppointments = () => {
               </table>
             ) : (
               <div className="text-center text-gray-500">No appointments found.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* New Meeting Events Table */}
+      {loggedInDoctor && (
+        <div className="w-full max-w-4xl bg-white shadow-lg rounded-lg mt-8">
+          <div className="bg-green-600 text-white p-4 rounded-t-lg">
+            <h2 className="text-center text-2xl font-semibold">Meeting Schedule</h2>
+          </div>
+          <div className="p-4">
+            {loading ? (
+              <div className="text-center text-gray-500">Loading meeting data...</div>
+            ) : (
+              <table className="min-w-full border-collapse table-auto">
+                <thead>
+                  <tr className="bg-gray-200">
+                    <th className="border-b px-4 py-2 font-semibold text-center">Patient Email</th>
+                    <th className="border-b px-4 py-2 font-semibold text-center">Date</th>
+                    <th className="border-b px-4 py-2 font-semibold text-center">Time</th>
+                    <th className="border-b px-4 py-2 font-semibold text-center">Meeting Link</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {meetingEvents.map((event, index) => (
+                    <tr key={index} className="hover:bg-gray-100">
+                      <td className="border-b px-4 py-2 text-center">{event.createdBy}</td>
+                      <td className="border-b px-4 py-2 text-center">
+                        {new Date(event.selectedDate).toLocaleDateString('en-IN')}
+                      </td>
+                      <td className="border-b px-4 py-2 text-center">
+                        {event.selectedTime}
+                      </td>
+                      <td className="border-b px-4 py-2 text-center">
+                        <a 
+                          href={event.locationUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline"
+                        >
+                          Join Meeting
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         </div>

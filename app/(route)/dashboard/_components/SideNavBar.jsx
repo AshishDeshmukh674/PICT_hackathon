@@ -1,6 +1,6 @@
 "use client";
 import { Button } from "../../../../components/ui/button";
-import { Briefcase, Calendar, Clock, Plus, Settings } from "lucide-react";
+import { Briefcase, Calendar, Home } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -19,6 +19,12 @@ function SideNavBar() {
       name: "Scheduled Meeting",
       path: "/dashboard/scheduled-meeting",
       icon: Calendar,
+    },
+    {
+      id: 3,
+      name: "Go Back Home",
+      path: "/",
+      icon: Home,
     }
   ];
 
