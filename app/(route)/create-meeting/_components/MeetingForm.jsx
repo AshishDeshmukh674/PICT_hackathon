@@ -39,6 +39,7 @@ function MeetingForm({ setFormValue }) {
   const [selectedTime, setSelectedTime] = useState(null);
   const [locationInputUrl, setLocationInputUrl] = useState("");
   const [doctorId, setDoctorId] = useState(null);
+  const [clinicType, setClinicType] = useState('Morning Clinic');
 
 
   const isBrowser = typeof window !== "undefined";
@@ -48,12 +49,16 @@ function MeetingForm({ setFormValue }) {
     const zoomToken = localStorage.getItem("zoomAccessToken");
 
     // Check for Zoom authorization code only once
-    const urlParams = new URLSearchParams(window.location.search);
-    const authCode = urlParams.get("code");
-    if (authCode && !zoomToken) {
-      handleZoomAuth(authCode);
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const authCode = urlParams.get("code");
+      const doctorId = urlParams.get("doctorId"); // Get doctorId from URL
+      
+      if (authCode && !zoomToken) {
+        handleZoomAuth(authCode, doctorId); // Pass doctorId to handleZoomAuth
+      }
     }
-  }, []); // Empty dependency array to run only once
+  }, []);
 
   // Update the effect to sync with localStorage
   useEffect(() => {
@@ -118,9 +123,13 @@ function MeetingForm({ setFormValue }) {
     localStorage.removeItem("clinicType"); // Clear clinic type
   };
 
-  const handleZoomAuth = async (authCode) => {
+  const handleZoomAuth = async (authCode, doctorId) => {
     try {
-      window.history.replaceState({}, document.title, window.location.pathname);
+      // Preserve doctorId when clearing URL parameters
+      const newUrl = doctorId 
+        ? `/create-meeting?doctorId=${doctorId}`
+        : '/create-meeting';
+      window.history.replaceState({}, document.title, newUrl);
 
       const response = await axios.post("/api/zoom/token", {
         code: authCode,
@@ -164,6 +173,17 @@ function MeetingForm({ setFormValue }) {
     const state = Math.random().toString(36).substring(7);
     localStorage.setItem("zoom_auth_state", state);
 
+    // Get current doctorId from URL and current clinic type
+    const urlParams = new URLSearchParams(window.location.search);
+    const doctorId = urlParams.get("doctorId");
+    const currentClinicType = localStorage.getItem("clinicType") || clinicType;
+
+    // Store values to preserve through auth flow
+    if (doctorId) {
+      localStorage.setItem("temp_doctor_id", doctorId);
+    }
+    localStorage.setItem("temp_clinic_type", currentClinicType);
+
     // Construct Zoom OAuth URL
     const zoomAuthUrl = `https://zoom.us/oauth/authorize?response_type=code&client_id=${ZOOM_CLIENT_ID}&redirect_uri=${encodeURIComponent(
       ZOOM_REDIRECT_URI
@@ -173,27 +193,30 @@ function MeetingForm({ setFormValue }) {
     window.location.href = zoomAuthUrl;
   };
 
-  // Add this useEffect to handle Zoom authorization callback
+  // Update the Zoom callback handler
   useEffect(() => {
     const handleZoomCallback = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get("code");
       const state = urlParams.get("state");
       const storedState = localStorage.getItem("zoom_auth_state");
+      const storedDoctorId = localStorage.getItem("temp_doctor_id");
+      const storedClinicType = localStorage.getItem("temp_clinic_type");
 
       if (code && state && state === storedState) {
-        // Clear the state from storage
+        // Clear the stored values
         localStorage.removeItem("zoom_auth_state");
+        localStorage.removeItem("temp_doctor_id");
+        localStorage.removeItem("temp_clinic_type");
 
-        // Clear URL parameters
-        window.history.replaceState(
-          {},
-          document.title,
-          window.location.pathname
-        );
+        // Restore clinic type
+        if (storedClinicType) {
+          localStorage.setItem("clinicType", storedClinicType);
+          setClinicType(storedClinicType);
+        }
 
         // Handle the authorization code
-        await handleZoomAuth(code);
+        await handleZoomAuth(code, storedDoctorId);
       }
     };
 
@@ -261,6 +284,8 @@ function MeetingForm({ setFormValue }) {
 
   // Update the isFormValid function
   const isFormValid = () => {
+    if (typeof window === 'undefined') return false;
+
     const requiredFields = {
       eventName: !!eventName?.trim(),
       duration: !!duration,

@@ -102,9 +102,9 @@ function MeetingEventList() {
                   <Settings className="cursor-pointer" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
-                  <DropdownMenuItem className="flex gap-2">
+                  {/* <DropdownMenuItem className="flex gap-2">
                     <Pen /> Edit
-                  </DropdownMenuItem>
+                  </DropdownMenuItem> */}
                   <DropdownMenuItem
                     className="flex gap-2"
                     onClick={() => onDeleteMeetingEvent(event)}

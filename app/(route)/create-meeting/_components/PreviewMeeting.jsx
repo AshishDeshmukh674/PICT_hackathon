@@ -7,7 +7,7 @@ import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import GlobalApi from '../../../_utils/GlobalApi';
 import { useSearchParams } from 'next/navigation';
-import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { app } from '../../../config/FirebaseConfig';
 import { cn } from "../../../../lib/utils";
 
@@ -21,26 +21,27 @@ function PreviewMeeting({ formValue, setFormValue }) {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [doctorSlots, setDoctorSlots] = useState(null);
-  const [clinicType, setClinicType] = useState('Morning Clinic');
+  const [clinicType, setClinicType] = useState('Evening Clinic');
   const [doctorId, setDoctorId] = useState(null);
   const searchParams = useSearchParams();
   const db = getFirestore(app);
 
   const getTimeSlotsForDoctor = (doctorId) => {
     const doctorTimeSlots = {
-      '3': { morning: [[8, 30], [9, 30]], evening: [[19, 30], [20, 30]] },
+      '3': { 
+        evening: [[20, 0], [22, 0]] // 8 PM to 10 PM
+      },
       '4': { 
-        morning: [[8, 0], [9, 0]], 
-        evening: [[11, 0], [1, 0]],
-        AfterNoon: [[9, 0], [11, 0]]
+        evening: [[20, 0], [22, 0]]
       },
       '5': {
-        morning: [[8, 30], [11, 0]], 
-        evening: [[19, 0], [21, 0]]
+        evening: [[20, 0], [22, 0]]
       },
-      '7': { morning: [[8, 0], [10, 45]] },
+      '7': { 
+        evening: [[20, 0], [22, 0]]
+      }
     };
-    return doctorTimeSlots[doctorId] || { morning: [[9, 0], [12, 0]], evening: [[13, 0], [18, 0]] };
+    return doctorTimeSlots[doctorId] || { evening: [[20, 0], [22, 0]] }; // Default 8 PM to 10 PM
   };
 
   useEffect(() => {
@@ -48,8 +49,16 @@ function PreviewMeeting({ formValue, setFormValue }) {
     // Load saved values from localStorage
     const savedDate = localStorage.getItem("selectedDate");
     const savedTime = localStorage.getItem("selectedTime");
+    const savedClinicType = localStorage.getItem("clinicType");
+    
     if (savedDate) setDate(new Date(savedDate));
     if (savedTime) setSelectedTime(savedTime);
+    if (savedClinicType) setClinicType(savedClinicType);
+    else {
+      // If no saved clinic type, set and save Evening Clinic as default
+      setClinicType('Evening Clinic');
+      localStorage.setItem("clinicType", 'Evening Clinic');
+    }
 
     // Add console.log to debug formValue
     console.log("Current formValue:", formValue);
@@ -68,24 +77,39 @@ function PreviewMeeting({ formValue, setFormValue }) {
   useEffect(() => {
     const fetchBookedSlotsAndUpdateTimeSlots = async () => {
       try {
-        const dateStr = date.toLocaleDateString('en-CA');
+        // Format date for API call
+        const dateStr = date.toISOString().split('T')[0];
         console.log('Fetching booked slots for date:', dateStr);
+        console.log('Current clinic type:', clinicType);
+        console.log('Current doctor ID:', doctorId);
+        
+        // Fetch appointments from your API
         const response = await GlobalApi.getDoctorAppointmentsByDate(doctorId, dateStr);
-        const bookedTimes = response.data.data
+        const appointmentBookedTimes = response.data.data
           ? response.data.data.map(appointment => appointment.attributes.Time)
           : [];
         
-        // Update time slots excluding booked ones
-        createTimeSlot(formValue?.duration || 30, bookedTimes);
+        console.log('Appointment booked times:', appointmentBookedTimes);
+        
+        // Fetch meetings from Firebase
+        const meetingBookedTimes = await fetchBookedMeetings(date);
+        console.log('Meeting booked times:', meetingBookedTimes);
+        
+        // Combine both sets of booked times
+        const allBookedTimes = [...appointmentBookedTimes, ...meetingBookedTimes];
+        console.log('All booked times:', allBookedTimes);
+        
+        // Update time slots excluding all booked ones
+        createTimeSlot(formValue?.duration || 30, allBookedTimes);
       } catch (error) {
-        console.error("Failed to fetch booked slots:", error.response ? error.response.data : error.message);
+        console.error("Failed to fetch booked slots:", error);
       }
     };
 
     if (date && clinicType && doctorId) {
       fetchBookedSlotsAndUpdateTimeSlots();
     }
-  }, [date, clinicType, doctorId]);
+  }, [date, clinicType, doctorId, formValue?.duration]);
 
   /**
    * Creates time slots based on interval
@@ -95,8 +119,7 @@ function PreviewMeeting({ formValue, setFormValue }) {
     if (!doctorId) return;
 
     const timeList = [];
-    const clinicTypeOnly = clinicType.split(" - ")[0];
-    const { morning, evening, AfterNoon } = getTimeSlotsForDoctor(doctorId);
+    const { evening } = getTimeSlotsForDoctor(doctorId);
 
     const isToday = isSameDay(date, new Date());
     const isTomorrow = isSameDay(date, new Date(Date.now() + 24 * 60 * 60 * 1000));
@@ -138,24 +161,9 @@ function PreviewMeeting({ formValue, setFormValue }) {
       }
     };
 
-    // Special case for doctor ID 5
-    if (doctorId === '5') {
-      if (clinicTypeOnly === 'Morning Clinic' && (dayOfWeek === 1 || dayOfWeek === 6)) {
-        generateTimeSlots(morning[0], morning[1]);
-      } else if (clinicTypeOnly === 'Evening Clinic' && dayOfWeek === 4) {
-        generateTimeSlots(evening[0], evening[1]);
-      } else {
-        setTimeSlots([]);
-        return;
-      }
-    } else {
-      if (clinicTypeOnly === 'Morning Clinic' && morning) {
-        generateTimeSlots(morning[0], morning[1]);
-      } else if (clinicTypeOnly === 'Evening Clinic' && evening) {
-        generateTimeSlots(evening[0], evening[1]);
-      } else if (clinicTypeOnly === 'AfterNoon Clinic' && AfterNoon) {
-        generateTimeSlots(AfterNoon[0], AfterNoon[1]);
-      }
+    // Generate evening slots (removed the clinicType check since we only have evening slots)
+    if (evening) {
+      generateTimeSlots(evening[0], evening[1]);
     }
 
     setTimeSlots(timeList);
@@ -197,7 +205,7 @@ function PreviewMeeting({ formValue, setFormValue }) {
   const handleDateSelect = (newDate) => {
     if (!newDate) return;
     setDate(newDate);
-    const dateString = newDate.toISOString();
+    const dateString = newDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
     localStorage.setItem("selectedDate", dateString);
     if (setFormValue) {
       setFormValue((prev) => ({ ...prev, selectedDate: dateString }));
@@ -326,12 +334,46 @@ function PreviewMeeting({ formValue, setFormValue }) {
 
   // Update the clinic type change handler
   const handleClinicTypeChange = (e) => {
-    setClinicType(e.target.value);
+    const newClinicType = e.target.value;
+    setClinicType(newClinicType);
+    localStorage.setItem("clinicType", newClinicType);
+    
     // Clear selected time when clinic type changes
     setSelectedTime(null);
     localStorage.removeItem("selectedTime");
     if (setFormValue) {
-      setFormValue((prev) => ({ ...prev, selectedTime: null }));
+      setFormValue((prev) => ({ ...prev, selectedTime: null, clinicType: newClinicType }));
+    }
+  };
+
+  // Add function to fetch booked meetings from Firebase
+  const fetchBookedMeetings = async (selectedDate) => {
+    try {
+      // Format the selected date to match the stored format (YYYY-MM-DD)
+      const formattedDate = selectedDate.toISOString().split('T')[0];
+      console.log('Fetching meetings for date:', formattedDate);
+      
+      // Query Firebase for booked meetings
+      const meetingsRef = collection(db, "MeetingEvent");
+      const q = query(meetingsRef, 
+        where("doctorId", "==", doctorId),
+        where("selectedDate", "==", formattedDate)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const bookedSlots = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        console.log('Found booked meeting:', data);
+        bookedSlots.push(data.selectedTime);
+      });
+      
+      console.log('Booked slots for this date:', bookedSlots);
+      return bookedSlots;
+    } catch (error) {
+      console.error("Error fetching booked meetings:", error);
+      return [];
     }
   };
 
@@ -406,9 +448,7 @@ function PreviewMeeting({ formValue, setFormValue }) {
                     onChange={handleClinicTypeChange}
                     className="w-full p-2 border rounded-md mb-4"
                   >
-                    <option value="Morning Clinic">Morning Clinic</option>
                     <option value="Evening Clinic">Evening Clinic</option>
-                    <option value="AfterNoon Clinic">Afternoon Clinic</option>
                   </select>
 
                   <Calendar
