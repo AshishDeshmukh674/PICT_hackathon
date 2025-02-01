@@ -9,6 +9,7 @@ import { ChatMessage } from "./ChatMessage";
 import GlobalApi from "../_utils/GlobalApi";
 import axios from 'axios';
 import { FileUploadHandler } from "./FileUploadHandler";
+import { doctorTypes, extractDoctorType } from './doctorTypes';
 
 const LANGUAGE_OPTIONS = {
   en: "English",
@@ -785,7 +786,7 @@ export default function ChatBot({ isOpen, onClose }) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 
               chatHistory: [...chatHistory, { role: "user", content: input }],
-              language: selectedLanguage
+              language: selectedLanguage || "en"
             }),
           });
 
@@ -797,6 +798,24 @@ export default function ChatBot({ isOpen, onClose }) {
             role: "assistant", 
             content: data.response
           }]);
+          const llmResponse =data.response;
+          const doctorType = extractDoctorType(llmResponse);
+          console.log(doctorType);
+          if(doctorType){
+            try{doctorlist_ = await GlobalApi.getDoctorByCategory(doctorType);
+            await speak(doctorlist)
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: doctorlist   
+            }]);}
+            catch (error) {
+              console.error("Error getting doctor list:", error);
+              await speak("Sorry, there was an error processing your request.");
+              setChatHistory(prev => [...prev, { role: "assistant", content: "Sorry, there was an error processing your request." }]);
+            } 
+          }
+
+
         }
       }
     } catch (error) {
@@ -1320,8 +1339,10 @@ export default function ChatBot({ isOpen, onClose }) {
             ))}
             {isLoading && <TypingAnimation />}
             <div className="mt-4">
-              <FileUploadHandler onExtractedText={handleExtractedText} />
-            </div>
+            <FileUploadHandler 
+  onExtractedText={handleExtractedText} 
+  language={selectedLanguage} 
+/>            </div>
           </ScrollArea>
           <div className="p-4 border-t border-gray-200">
             <div className="flex justify-end mb-2">

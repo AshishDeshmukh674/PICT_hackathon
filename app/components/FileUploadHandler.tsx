@@ -3,27 +3,39 @@ import Tesseract from 'tesseract.js';
 import { useState, useEffect } from 'react';
 import { Upload, Loader2 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
-import * as pdfjs from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist';
 
 interface FileUploadHandlerProps {
   onExtractedText: (text: string) => void;
+  language?: string; // Add language prop
 }
 
-export function FileUploadHandler({ onExtractedText }: FileUploadHandlerProps) {
+export function FileUploadHandler({ onExtractedText, language = 'eng' }: FileUploadHandlerProps) {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Initialize PDF.js worker
   useEffect(() => {
     const setupPdfWorker = async () => {
-      pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+      const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker.default;
     };
     setupPdfWorker().catch(console.error);
   }, []);
 
   const processImage = async (file: File) => {
+    // Map app languages to Tesseract language codes
+    const langMap: { [key: string]: string } = {
+      en: 'eng',
+      hi: 'hin',
+      mr: 'mar',
+      gu: 'guj'
+    };
+
+    const tesseractLang = langMap[language] || 'eng';
+
     const result = await Tesseract.recognize(
       file,
-      'eng',
+      tesseractLang, // Use the mapped language
       {
         logger: m => console.log(m)
       }
@@ -34,7 +46,7 @@ export function FileUploadHandler({ onExtractedText }: FileUploadHandlerProps) {
   const processPDF = async (file: File) => {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       let fullText = '';
       
       for (let i = 1; i <= pdf.numPages; i++) {
@@ -104,9 +116,6 @@ export function FileUploadHandler({ onExtractedText }: FileUploadHandlerProps) {
     </div>
   );
 }
-
-
-
 
 
 
