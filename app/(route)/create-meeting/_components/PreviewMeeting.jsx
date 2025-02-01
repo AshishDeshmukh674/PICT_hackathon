@@ -340,20 +340,7 @@ function PreviewMeeting({ formValue, setFormValue }) {
   }
 
   return (
-    <div
-      className="p-6 lg:p-8 m-3 lg:m-5 rounded-xl shadow-lg border-t-8 bg-white max-w-7xl mx-auto"
-      style={{ borderTopColor: formValue?.themeColor }}
-    >
-      <div className="flex items-center justify-between mb-6 lg:mb-8">
-        <Image
-          src="/logo.png"
-          alt="logo"
-          width={120}
-          height={120}
-          className="object-contain"
-        />
-      </div>
-
+    <div className="p-4 md:p-6 lg:p-8 bg-white rounded-xl shadow-lg border-t-8 max-w-7xl mx-auto">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
         {/* Meeting Info */}
         <div className="lg:col-span-4">

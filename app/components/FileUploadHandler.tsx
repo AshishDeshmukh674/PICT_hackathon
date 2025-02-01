@@ -3,7 +3,7 @@ import Tesseract from 'tesseract.js';
 import { useState, useEffect } from 'react';
 import { Upload, Loader2 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjs from 'pdfjs-dist';
 
 interface FileUploadHandlerProps {
   onExtractedText: (text: string) => void;
@@ -15,8 +15,7 @@ export function FileUploadHandler({ onExtractedText }: FileUploadHandlerProps) {
   // Initialize PDF.js worker
   useEffect(() => {
     const setupPdfWorker = async () => {
-      const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.min.js');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker.default;
+      pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
     };
     setupPdfWorker().catch(console.error);
   }, []);
@@ -35,7 +34,7 @@ export function FileUploadHandler({ onExtractedText }: FileUploadHandlerProps) {
   const processPDF = async (file: File) => {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
       let fullText = '';
       
       for (let i = 1; i <= pdf.numPages; i++) {

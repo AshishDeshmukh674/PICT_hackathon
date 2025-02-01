@@ -11,12 +11,13 @@ import { app } from '../../../config/FirebaseConfig';
 
 function DoctorDetails({ params }) {
   const [doctor, setDoctor] = useState(null);
-  const recordId = React.use(params).recordId;
-  const db = getFirestore(app);
+  const recordId = params.recordId;
 
   useEffect(() => {
-    getDoctorById();
-  }, []);
+    if (recordId) {
+      getDoctorById();
+    }
+  }, [recordId]);
 
   const getDoctorById = async () => {
     try {
