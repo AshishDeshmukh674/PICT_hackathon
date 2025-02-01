@@ -9,9 +9,16 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "../../../../components/ui/dropdown-menu"
+import { useRouter } from 'next/navigation';
 
 function DashboardHeader() {
     const { user } = useKindeBrowserClient();
+    const router = useRouter();
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+    const handleHomeClick = () => {
+        router.push(baseUrl || 'http://localhost:3000');
+    };
 
     return user && (
         <div className='p-4 px-10'>
@@ -26,6 +33,11 @@ function DashboardHeader() {
                         <ChevronDown />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
+                        <DropdownMenuItem onClick={handleHomeClick}>
+                            <div className="flex items-center gap-2">
+                                <span>Home</span>
+                            </div>
+                        </DropdownMenuItem>
                         <DropdownMenuItem>
                             <LogoutLink>Logout</LogoutLink>
                         </DropdownMenuItem>

@@ -56,7 +56,7 @@ function DoctorList({ doctorList }) {
               {user ? (
                 <Link 
                   href={`/create-meeting?doctorId=${doctor?.id}`}
-                  className="mt-4 py-2 bg-primary text-white text-sm rounded-full w-full text-center transition-colors duration-300 hover:bg-blue-700"
+                  className="mt-1 py-2 bg-indigo-600 text-white text-sm rounded-full w-full text-center transition-colors duration-300 hover:bg-indigo-800"
                 >
                   Schedule a Meeting
                 </Link>
