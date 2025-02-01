@@ -9,6 +9,7 @@ import GlobalApi from '../../../_utils/GlobalApi';
 import { useSearchParams } from 'next/navigation';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
 import { app } from '../../../config/FirebaseConfig';
+import { cn } from "../../../../lib/utils";
 
 function PreviewMeeting({ formValue, setFormValue }) {
   const [mounted, setMounted] = useState(false);
@@ -420,24 +421,28 @@ function PreviewMeeting({ formValue, setFormValue }) {
                     disabled={(d) => d < new Date().setHours(0, 0, 0, 0)}
                     showOutsideDays={false}
                     fixedWeeks={true}
-                    ISOWeek={true}
+                    weekStartsOn={0}
                     classNames={{
-                      months: "flex flex-col space-y-4",
-                      month: "space-y-4",
-                      caption: "flex justify-center relative items-center h-10",
-                      caption_label: "text-sm font-medium",
-                      nav: "hidden",
-                      table: "w-full border-collapse space-y-1",
-                      head_row: "flex justify-between",
-                      head_cell: "text-gray-500 font-medium text-sm w-9 h-9",
-                      row: "flex w-full mt-2 justify-between",
-                      cell: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20",
-                      day: "h-9 w-9 p-0 font-normal hover:bg-gray-100 rounded-lg transition-colors",
-                      day_selected: "bg-blue-600 text-white hover:bg-blue-700 hover:text-white focus:bg-blue-600 focus:text-white rounded-lg",
-                      day_today: "bg-gray-50 text-gray-900 rounded-lg font-semibold",
-                      day_outside: "hidden",
-                      day_disabled: "text-gray-400 opacity-50 cursor-not-allowed",
-                      day_hidden: "invisible",
+                        months: "flex flex-col space-y-4",
+                        month: "space-y-4",
+                        caption: "flex justify-center relative items-center h-10",
+                        caption_label: "text-sm font-medium",
+                        nav: "hidden",
+                        table: "w-full border-collapse space-y-1",
+                        head_row: "grid grid-cols-7",
+                        head_cell: "text-gray-500 font-medium text-sm text-center",
+                        row: "grid grid-cols-7 mt-2",
+                        cell: "text-center p-0",
+                        day: cn(
+                            "h-9 w-9 p-0 mx-auto",
+                            "inline-flex items-center justify-center rounded-md",
+                            "text-sm font-normal transition-colors hover:bg-accent"
+                        ),
+                        day_selected: "bg-blue-600 text-white hover:bg-blue-700",
+                        day_today: "bg-accent text-accent-foreground",
+                        day_outside: "text-muted-foreground opacity-50",
+                        day_disabled: "text-muted-foreground opacity-50",
+                        day_hidden: "invisible",
                     }}
                   />
                 </div>
