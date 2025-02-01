@@ -1,7 +1,7 @@
 "use client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { app } from "@/config/FirebaseConfig";
+import { Button } from "../../../components/ui/button";
+import { Input } from "../../../components/ui/input";
+import { app } from "../../../app/config/FirebaseConfig";
 import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
 import { doc, getFirestore, setDoc } from "firebase/firestore";
 import Image from "next/image";

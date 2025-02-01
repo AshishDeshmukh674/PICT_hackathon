@@ -348,7 +348,7 @@ function MeetingForm({ setFormValue }) {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8 lg:p-10 max-w-4xl mx-auto">
       <Link href={"/dashboard"} onClick={clearMeetingDetails}>
         <h2 className="flex gap-2">
           <ChevronLeft /> Cancel

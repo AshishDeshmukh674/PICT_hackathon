@@ -17,7 +17,7 @@ function Calendar({
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      className={cn("p-3", className)}
+      className={cn("w-full p-3 md:p-4", className)}
       month={month}
       onMonthChange={onMonthChange}
       classNames={{
@@ -32,24 +32,39 @@ function Calendar({
         ),
         nav_button_previous: "absolute left-1",
         nav_button_next: "absolute right-1",
-        table: "w-full border-collapse space-y-1",
-        head_row: "flex justify-between",
-        head_cell: "text-muted-foreground rounded-md w-8 h-8 font-medium text-[0.8rem]",
-        row: "flex w-full mt-1 justify-between",
-        cell: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 w-8 h-8",
-        day: cn(
-          "h-8 w-8 p-0 font-normal aria-selected:opacity-100 hover:bg-gray-100 rounded-md transition-colors duration-200 cursor-pointer flex items-center justify-center text-sm"
+        table: "w-full border-collapse",
+        head_row: "grid grid-cols-7",
+        head_cell: cn(
+          "text-muted-foreground text-center text-[0.8rem] font-medium",
+          "h-9 p-0 align-middle"
         ),
-        day_selected: "bg-blue-600 text-white hover:bg-blue-700 rounded-md",
-        day_today: "bg-gray-50 text-gray-900 font-medium rounded-md",
-        day_outside: "text-gray-400 opacity-50 hover:bg-gray-50",
-        day_disabled: "text-gray-400 opacity-50 cursor-not-allowed hover:bg-transparent",
+        row: "grid grid-cols-7 mt-2",
+        cell: cn(
+          "text-center text-sm align-middle",
+          "relative p-0 focus-within:relative focus-within:z-20"
+        ),
+        day: cn(
+          "h-9 w-9 p-0 mx-auto",
+          "inline-flex items-center justify-center rounded-md",
+          "text-sm font-normal transition-colors hover:bg-accent",
+          "cursor-pointer select-none"
+        ),
+        day_selected: "bg-blue-600 text-white hover:bg-blue-700",
+        day_today: "bg-accent text-accent-foreground",
+        day_outside: "text-muted-foreground opacity-50",
+        day_disabled: "text-muted-foreground opacity-50 cursor-not-allowed",
         day_hidden: "invisible",
         ...classNames,
       }}
       components={{
         IconLeft: ({ ...props }) => <ChevronLeft className="h-4 w-4" />,
         IconRight: ({ ...props }) => <ChevronRight className="h-4 w-4" />,
+      }}
+      weekStartsOn={0}
+      formatters={{
+        formatWeekdayName: (date) => {
+          return date.toLocaleDateString('en-US', { weekday: 'short' });
+        }
       }}
       {...props}
     />

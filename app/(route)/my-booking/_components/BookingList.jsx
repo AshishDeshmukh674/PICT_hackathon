@@ -27,10 +27,9 @@ function BookingList({ bookingList, expired }) {
     };
 
     return (
-        <div>
-            {localBookingList && localBookingList.map((item, index) => (
-                <div key={index} className='flex gap-4 items-center border p-5 m-3 rounded-lg'>
-                    
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+            {localBookingList?.map((item, index) => (
+                <div key={index} className='flex flex-col p-4 md:p-6 border rounded-lg'>
                     <div className='flex flex-col gap-2 w-full'>
                         <h2 className='font-bold text-[18px] items-center flex justify-between'>
                             {item.attributes.doctor.data.attributes.Name}

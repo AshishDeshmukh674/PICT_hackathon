@@ -9,11 +9,13 @@ import DoctorDetail from '/app/(route)/details/[recordId]/_components/DoctorDeta
 
 function DoctorDetails({ params }) {
   const [doctor, setDoctor] = useState(null);
-  const recordId = React.use(params).recordId;
+  const recordId = params.recordId;
 
   useEffect(() => {
-    getDoctorById();
-  }, []);
+    if (recordId) {
+      getDoctorById();
+    }
+  }, [recordId]);
 
   const getDoctorById = async () => {
     try {
