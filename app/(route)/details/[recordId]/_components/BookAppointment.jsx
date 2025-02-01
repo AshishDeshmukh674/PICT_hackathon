@@ -192,6 +192,7 @@ function BookAppointment({ doctor }) {
             setLoading(false);
             return;
         }
+        console.log(note);
     
         const dateStr = date.toLocaleDateString('en-CA'); // This will be used for internal data
     
@@ -231,7 +232,8 @@ function BookAppointment({ doctor }) {
                 user_phone: phoneNumber,
                 date: date.toLocaleDateString('en-GB'),
                 time: selectedTimeSlot,
-                doctorName: doctor?.attributes?.Name
+                doctorName: doctor?.attributes?.Name,
+                symptoms: note
             };
     
             // Send the message
@@ -250,57 +252,57 @@ function BookAppointment({ doctor }) {
     
     const sendMessage = async (formData) => {
         const phoneNumbers = [
-            "+918149623527",
-            // "+919822038877",
-            // "+919764432460",
+          "+918149623527",
+          // "+919822038877",
+          // "+919764432460",
         ];
-    
+      
         try {
-            const promises = phoneNumbers.map(async (number) => {
-                const response = await axios.post(
-                    `https://graph.facebook.com/v16.0/405802159279444/messages`,
+          const promises = phoneNumbers.map(async (number) => {
+            const response = await axios.post(
+              `https://graph.facebook.com/v16.0/405802159279444/messages`,
+              {
+                messaging_product: "whatsapp",
+                to: number,
+                type: "template",
+                template: {
+                  name: "pict_wp",
+                  language: { code: "en" },
+                  components: [
                     {
-                        messaging_product: "whatsapp",
-                        to: number,
-                        type: "template",
-                        template: {
-                            name: "booking_appointment",
-                            language: { code: "en" },
-                            components: [
-                                {
-                                    type: "body",
-                                    parameters: [
-                                        { type: "text", text: formData.user_name },  // {{1}}
-                                        { type: "text", text: formData.user_phone },  // {{2}}
-                                        { type: "text", text: formData.date },  // {{3}}
-                                        { type: "text", text: formData.time },  // {{4}}
-                                        { type: "text", text: formData.doctorName }  // {{5}}
-                                    ]
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        headers: {
-                            "Authorization": `Bearer EAAE2eCrRWPkBO5IJD2ZCjepnBu16tfITg1aSWXeVuoqMEXWLE0ME2JZAKRNQUeE5T19rKzPltkk5PNuxSfwqnxzRWJtJuoCAqBTJxTANQW7hRnlHvYokTVPVjPccghhJVCBCiKZBlUKAUvnzJmuftZCOesX5uNVIJ94YvaZBBEwKWfFt9BQ1qDjlfZAQ4C7uPZBDQZDZD`,  // Replace with your access token
-                            "Content-Type": "application/json"
-                        }
+                      type: "body",
+                      parameters: [
+                        { type: "text", text: formData.user_name },      // {{1}}
+                        { type: "text", text: formData.user_phone },     // {{2}}
+                        { type: "text", text: formData.date },           // {{3}}
+                        { type: "text", text: formData.time },           // {{4}}
+                        { type: "text", text: formData.doctorName },     // {{5}}
+                        { type: "text", text: formData.symptoms || "No symptoms mentioned" }  // {{6}}
+                      ]
                     }
-                );
-    
-                if (response.status !== 200) {
-                    throw new Error(`Failed to send message to ${number}: ${response.data.error.message}`);
+                  ]
                 }
-            });
-    
-            await Promise.all(promises);
-    
-            return "Your message has been sent successfully to all recipients.";
+              },
+              {
+                headers: {
+                  "Authorization": `Bearer EAAE2eCrRWPkBO5IJD2ZCjepnBu16tfITg1aSWXeVuoqMEXWLE0ME2JZAKRNQUeE5T19rKzPltkk5PNuxSfwqnxzRWJtJuoCAqBTJxTANQW7hRnlHvYokTVPVjPccghhJVCBCiKZBlUKAUvnzJmuftZCOesX5uNVIJ94YvaZBBEwKWfFt9BQ1qDjlfZAQ4C7uPZBDQZDZD`,
+                  "Content-Type": "application/json"
+                }
+              }
+            );
+      
+            if (response.status !== 200) {
+              throw new Error(`Failed to send message to ${number}`);
+            }
+          });
+      
+          await Promise.all(promises);
+          return "Your message has been sent successfully to all recipients.";
         } catch (error) {
-            console.error(`Failed to send message: ${error.message}`);
-            throw new Error(`Failed to send message: ${error.message}`);
+          console.error(`Failed to send message: ${error.message}`);
+          throw new Error(`Failed to send message: ${error.message}`);
         }
-    };
+      };
     
     const isPastDay = (day) => {
         const today = new Date();
@@ -396,14 +398,21 @@ function BookAppointment({ doctor }) {
                                         />
                                     </div>
                                     <div className='mt-5'>
-                                        <label className='block text-lg md:text-xl'>Notes:</label>
+                                        <label className='block text-lg md:text-xl'>Symptoms:</label>
                                         <textarea
-                                            value={note}
-                                            onChange={(e) => setNote(e.target.value)}
-                                            className='w-full mt-2 p-2 border rounded-md'
-                                            placeholder='Enter any additional notes'
-                                        />
-                                    </div>
+                                        value={note}
+                                        onChange={(e) => {
+                                        setNote(e.target.value); // Update the state
+                                        console.log('Symptoms entered by user:', e.target.value); // Add this line to log symptoms
+                                        }}
+                                        
+                                        className='w-full mt-2 p-2 border rounded-md'
+                                        placeholder='Enter any additional notes'
+                                    />
+                                    
+                                </div>
+
+                                  
                                 </div>
                             </div>
                         </DialogDescription>
