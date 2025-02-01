@@ -310,6 +310,19 @@ function BookAppointment({ doctor }) {
         setCurrentMonth(month);
     };
 
+    // Add this function to check if a date has available slots
+    const hasAvailableSlots = (date) => {
+        const clinicTypeOnly = clinicType.split(" - ")[0];
+        const dayOfWeek = date.getDay();
+        
+        if (doctor.id === 5) {
+            return (clinicTypeOnly === 'Morning Clinic' && (dayOfWeek === 1 || dayOfWeek === 6)) ||
+                   (clinicTypeOnly === 'Evening Clinic' && dayOfWeek === 4);
+        }
+        
+        return true; // For other doctors
+    };
+
     return (
         <Dialog>
             <DialogTrigger>
@@ -334,7 +347,14 @@ function BookAppointment({ doctor }) {
                                             month={currentMonth}
                                             onMonthChange={handleMonthChange}
                                             className="rounded-lg w-full max-w-[350px]"
-                                            disabled={(d) => d < new Date().setHours(0, 0, 0, 0)}
+                                            disabled={(d) => {
+                                                const today = new Date();
+                                                today.setHours(0, 0, 0, 0);
+                                                return d < today || !hasAvailableSlots(d);
+                                            }}
+                                            modifiers={{
+                                                unavailable: (d) => !hasAvailableSlots(d)
+                                            }}
                                             showOutsideDays={false}
                                             fixedWeeks={true}
                                             weekStartsOn={0}
@@ -344,25 +364,36 @@ function BookAppointment({ doctor }) {
                                                 caption: "flex justify-center relative items-center h-10",
                                                 caption_label: "text-sm font-medium",
                                                 nav: "hidden",
-                                                table: "w-full border-collapse space-y-1",
-                                                head_row: "grid grid-cols-7",
-                                                head_cell: "text-gray-500 font-medium text-sm text-center",
-                                                row: "grid grid-cols-7 mt-2",
-                                                cell: "text-center p-0",
+                                                table: "w-full border-collapse",
+                                                head_row: "flex justify-between w-full",
+                                                head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] text-center",
+                                                row: "flex w-full mt-2",
+                                                cell: "text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-range-start)]:rounded-l-md first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md",
                                                 day: cn(
-                                                    "h-9 w-9 p-0 mx-auto",
-                                                    "inline-flex items-center justify-center rounded-md",
-                                                    "text-sm font-normal transition-colors hover:bg-accent"
+                                                    "h-9 w-9 p-0 font-normal",
+                                                    "aria-selected:opacity-100",
+                                                    "hover:bg-gray-100 hover:text-gray-900",
+                                                    "focus-visible:bg-gray-100 focus-visible:text-gray-900 focus-visible:rounded-sm",
+                                                    "text-sm transition-colors text-center"
                                                 ),
-                                                day_selected: "bg-blue-600 text-white hover:bg-blue-700",
+                                                day_range_end: "day-range-end",
+                                                day_range_start: "day-range-start",
+                                                day_selected: 
+                                                    "bg-blue-600 text-white hover:bg-blue-700 hover:text-white focus:bg-blue-600 focus:text-white rounded-md",
                                                 day_today: "bg-accent text-accent-foreground",
-                                                day_outside: "text-muted-foreground opacity-50",
-                                                day_disabled: "text-muted-foreground opacity-50",
+                                                day_outside: "invisible pointer-events-none",
+                                                day_disabled: "text-gray-300 cursor-not-allowed",
+                                                day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
                                                 day_hidden: "invisible",
+                                                day_unavailable: "text-gray-300",
+                                            }}
+                                            components={{
+                                                IconLeft: () => null,
+                                                IconRight: () => null
                                             }}
                                         />
                                     </div>
-                                    <div className="flex justify-between items-center px-4">
+                                    <div className="flex justify-between items-center mt-4 px-4">
                                         <Button
                                             variant="outline"
                                             size="sm"
@@ -371,6 +402,7 @@ function BookAppointment({ doctor }) {
                                                 const newDate = new Date(currentMonth);
                                                 newDate.setMonth(currentMonth.getMonth() - 1, 1);
                                                 const today = new Date();
+                                                // Only allow navigation to current month and forward
                                                 if (newDate >= new Date(today.getFullYear(), today.getMonth(), 1)) {
                                                     setCurrentMonth(newDate);
                                                 }
@@ -387,6 +419,8 @@ function BookAppointment({ doctor }) {
                                                 newDate.setMonth(currentMonth.getMonth() + 1, 1);
                                                 const maxDate = new Date();
                                                 maxDate.setFullYear(maxDate.getFullYear() + 1);
+                                                maxDate.setMonth(maxDate.getMonth() + 1);
+                                                // Only allow navigation up to next year + 1 month
                                                 if (newDate <= maxDate) {
                                                     setCurrentMonth(newDate);
                                                 }

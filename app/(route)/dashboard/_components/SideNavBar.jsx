@@ -34,17 +34,6 @@ function SideNavBar() {
         <Image src="/logo.png" width={150} height={150} alt="logo" />
       </div>
 
-      <Link href={"/create-meeting"}>
-        <Button
-          className="flex gap-2 w-full 
-                mt-7
-                rounded-full"
-        >
-          {" "}
-          <Plus /> Create
-        </Button>
-      </Link>
-
       <div className="mt-5 flex flex-col gap-5">
         {menu.map((item, index) => (
           <Link href={item.path} key={index}>

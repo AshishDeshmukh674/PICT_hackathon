@@ -1,7 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
-import ScheduledMeetingList from "./_components/ScheduledMeetingList";
 import {
   collection,
   getDocs,
@@ -21,7 +20,6 @@ function ScheduledMeeting() {
 
   useEffect(() => {
     if (user) {
-      console.log("Current user email:", user?.email);
       getScheduledMeetings();
     }
   }, [user]);
@@ -29,28 +27,21 @@ function ScheduledMeeting() {
   const getScheduledMeetings = async () => {
     try {
       setLoading(true);
-      console.log("Fetching meetings for email:", user?.email);
-
       const q = query(
         collection(db, "MeetingEvent"),
         where("createdBy", "==", user?.email)
       );
 
       const querySnapshot = await getDocs(q);
-      console.log("Query executed, size:", querySnapshot.size);
-
       const meetings = [];
       querySnapshot.forEach((doc) => {
-        console.log("Document data:", doc.data());
         meetings.push({
           id: doc.id,
-          ...doc.data(),
-          date: doc.data().createdAt,
-          time: doc.data().time || "00:00",
+          ...doc.data()
         });
       });
 
-      console.log("Processed meetings:", meetings);
+      console.log("Fetched meetings:", meetings); // Debug log
       setMeetingList(meetings);
     } catch (error) {
       console.error("Error fetching meetings:", error);
@@ -60,32 +51,30 @@ function ScheduledMeeting() {
   };
 
   const filterMeetingList = (type) => {
-    console.log("Filtering meetings for type:", type);
-    console.log("Current meetingList:", meetingList);
-
     if (!meetingList.length) return [];
 
     const currentDate = new Date();
-
+    
     return meetingList.filter((meeting) => {
-      // Use date from the meeting object, fallback to createdAt
-      const meetingDate = new Date(meeting.date || meeting.createdAt);
-
-      // Set the time to the start of the day for comparison
-      const meetingDateTime = new Date(meetingDate);
-      meetingDateTime.setHours(0, 0, 0, 0);
-
-      const currentDateTime = new Date();
-      currentDateTime.setHours(0, 0, 0, 0);
+      // Convert clinicTiming to hours and minutes
+      const timeStr = meeting.selectedTime.split(' ')[0]; // Get "8:30" from "8:30 AM"
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      
+      // Parse the selectedDate
+      const meetingDate = new Date(meeting.selectedDate);
+      meetingDate.setHours(hours);
+      meetingDate.setMinutes(minutes);
+      meetingDate.setSeconds(0);
+      meetingDate.setMilliseconds(0);
 
       console.log("Meeting:", meeting.eventName);
-      console.log("Meeting date:", meetingDateTime);
-      console.log("Current date:", currentDateTime);
-
+      console.log("Meeting date:", meetingDate);
+      console.log("Current date:", currentDate);
+      
       if (type === "upcoming") {
-        return meetingDateTime >= currentDateTime;
+        return meetingDate > currentDate;
       } else {
-        return meetingDateTime < currentDateTime;
+        return meetingDate <= currentDate;
       }
     });
   };
@@ -108,7 +97,7 @@ function ScheduledMeeting() {
         <TabsContent value="upcoming">
           {filterMeetingList("upcoming").length === 0 ? (
             <div className="text-center py-10 text-gray-500">
-              No upcoming meetings
+              No upcoming meetings 
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -117,7 +106,7 @@ function ScheduledMeeting() {
                   key={meeting.id}
                   className="border rounded-lg p-5 hover:border-primary cursor-pointer"
                   style={{
-                    borderTop: `4px solid ${meeting.themeColor || "#8B5CF6"}`,
+                    borderTop: `4px solid ${meeting.themeColor}`,
                   }}
                 >
                   <div className="flex justify-between items-start">
@@ -137,12 +126,15 @@ function ScheduledMeeting() {
                         {meeting.locationType}
                       </span>
                     </div>
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <span>{new Date(meeting.selectedDate).toLocaleDateString()}</span>
+                      <span>{meeting.selectedTime}</span>
+                    </div>
                     <div className="flex gap-3">
                       <button
                         className="text-primary flex items-center gap-2"
                         onClick={() => {
                           navigator.clipboard.writeText(meeting.locationUrl);
-                          // Optionally add a toast notification here
                         }}
                       >
                         <Link2 size={18} />
@@ -169,9 +161,9 @@ function ScheduledMeeting() {
               {filterMeetingList("expired").map((meeting) => (
                 <div
                   key={meeting.id}
-                  className="border rounded-lg p-5 hover:border-primary cursor-pointer"
+                  className="border rounded-lg p-5 hover:border-primary cursor-pointer opacity-70"
                   style={{
-                    borderTop: `4px solid ${meeting.themeColor || "#10B981"}`,
+                    borderTop: `4px solid ${meeting.themeColor}`,
                   }}
                 >
                   <div className="flex justify-between items-start">
@@ -190,6 +182,10 @@ function ScheduledMeeting() {
                         <Video size={20} />
                         {meeting.locationType}
                       </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <span>{new Date(meeting.selectedDate).toLocaleDateString()}</span>
+                      <span>{meeting.clinicTiming}</span>
                     </div>
                     <div className="flex gap-3">
                       <button

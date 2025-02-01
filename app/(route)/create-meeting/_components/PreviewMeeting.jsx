@@ -9,6 +9,7 @@ import GlobalApi from '../../../_utils/GlobalApi';
 import { useSearchParams } from 'next/navigation';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
 import { app } from '../../../config/FirebaseConfig';
+import { cn } from "../../../../lib/utils";
 
 function PreviewMeeting({ formValue, setFormValue }) {
   const [mounted, setMounted] = useState(false);
@@ -420,24 +421,38 @@ function PreviewMeeting({ formValue, setFormValue }) {
                     disabled={(d) => d < new Date().setHours(0, 0, 0, 0)}
                     showOutsideDays={false}
                     fixedWeeks={true}
-                    ISOWeek={true}
+                    weekStartsOn={0}
                     classNames={{
-                      months: "flex flex-col space-y-4",
-                      month: "space-y-4",
-                      caption: "flex justify-center relative items-center h-10",
-                      caption_label: "text-sm font-medium",
-                      nav: "hidden",
-                      table: "w-full border-collapse space-y-1",
-                      head_row: "flex justify-between",
-                      head_cell: "text-gray-500 font-medium text-sm w-9 h-9",
-                      row: "flex w-full mt-2 justify-between",
-                      cell: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20",
-                      day: "h-9 w-9 p-0 font-normal hover:bg-gray-100 rounded-lg transition-colors",
-                      day_selected: "bg-blue-600 text-white hover:bg-blue-700 hover:text-white focus:bg-blue-600 focus:text-white rounded-lg",
-                      day_today: "bg-gray-50 text-gray-900 rounded-lg font-semibold",
-                      day_outside: "hidden",
-                      day_disabled: "text-gray-400 opacity-50 cursor-not-allowed",
-                      day_hidden: "invisible",
+                        months: "flex flex-col space-y-4",
+                        month: "space-y-4",
+                        caption: "flex justify-center relative items-center h-10",
+                        caption_label: "text-sm font-medium",
+                        nav: "hidden",
+                        table: "w-full border-collapse",
+                        head_row: "flex justify-between w-full",
+                        head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] text-center",
+                        row: "flex w-full mt-2",
+                        cell: "text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-range-start)]:rounded-l-md first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md",
+                        day: cn(
+                            "h-9 w-9 p-0 font-normal",
+                            "aria-selected:opacity-100",
+                            "hover:bg-gray-100 hover:text-gray-900",
+                            "focus-visible:bg-gray-100 focus-visible:text-gray-900 focus-visible:rounded-sm",
+                            "text-sm transition-colors text-center"
+                        ),
+                        day_range_end: "day-range-end",
+                        day_range_start: "day-range-start",
+                        day_selected: "bg-blue-600 text-white hover:bg-blue-700 hover:text-white focus:bg-blue-600 focus:text-white rounded-md",
+                        day_today: "bg-accent text-accent-foreground",
+                        day_outside: "invisible pointer-events-none",
+                        day_disabled: "text-gray-300 cursor-not-allowed",
+                        day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
+                        day_hidden: "invisible",
+                        day_unavailable: "text-gray-300",
+                    }}
+                    components={{
+                        IconLeft: () => null,
+                        IconRight: () => null
                     }}
                   />
                 </div>
