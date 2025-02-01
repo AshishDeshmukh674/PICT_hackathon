@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from 'react';
-import ChatInterface from './ChatInterface';
+import ChatInterface from '../components/ChatInterface';
 
 const DietPlanner = () => {
     const [isFormSubmitted, setIsFormSubmitted] = useState(false);
