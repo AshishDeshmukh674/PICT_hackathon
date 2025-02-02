@@ -1,67 +1,79 @@
 import { useState } from 'react';
-import Tesseract from 'tesseract.js';
-import { Button } from '../../components/ui/button';
 import { Upload } from 'lucide-react';
+import { Button } from "../../components/ui/button";
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Initialize PDF.js worker
+if (typeof window !== 'undefined') {
+  const pdfjsWorker = require('pdfjs-dist/build/pdf.worker.min.js');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+}
 
 export function FileUploadHandler({ onExtractedText, language }) {
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    setIsProcessing(true);
+    setIsLoading(true);
+    setError(null);
+
     try {
-      // Map UI language to Tesseract language codes
-      const langMap = {
-        en: 'eng',
-        hi: 'hin',
-        mr: 'mar',
-        gu: 'guj'
-      };
+      if (file.type === 'application/pdf') {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let fullText = '';
 
-      const result = await Tesseract.recognize(
-        file,
-        langMap[language] || 'eng',
-        {
-          logger: m => console.log(m)
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map(item => item.str).join(' ');
+          fullText += pageText + '\n';
         }
-      );
 
-      if (onExtractedText && result.data.text) {
-        onExtractedText(result.data.text.trim());
+        if (onExtractedText) {
+          onExtractedText(fullText);
+        }
+      } else if (file.type === 'text/plain') {
+        const text = await file.text();
+        if (onExtractedText) {
+          onExtractedText(text);
+        }
+      } else {
+        throw new Error('Unsupported file type. Please upload a PDF or text file.');
       }
-    } catch (error) {
-      console.error('OCR Error:', error);
+    } catch (err) {
+      console.error('File processing error:', err);
+      setError(err.message || 'Failed to process file');
     } finally {
-      setIsProcessing(false);
-      event.target.value = ''; // Reset file input
+      setIsLoading(false);
+      // Clear the input value to allow uploading the same file again
+      event.target.value = '';
     }
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-col gap-2">
       <input
         type="file"
-        accept="image/*"
+        accept=".pdf,.txt"
         onChange={handleFileUpload}
         className="hidden"
         id="file-upload"
-        disabled={isProcessing}
       />
       <label htmlFor="file-upload">
         <Button 
           variant="outline" 
-          disabled={isProcessing}
           className="cursor-pointer"
-          asChild
+          disabled={isLoading}
         >
-          <span>
-            <Upload className="w-4 h-4 mr-2" />
-            {isProcessing ? 'Processing...' : 'Upload Image'}
-          </span>
+          <Upload className="w-4 h-4 mr-2" />
+          {isLoading ? 'Processing...' : 'Upload File'}
         </Button>
       </label>
+      {error && <p className="text-red-500 text-sm">{error}</p>}
     </div>
   );
 } 

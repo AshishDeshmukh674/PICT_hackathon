@@ -16,9 +16,10 @@ export function FileUploadHandler({ onExtractedText, language = 'eng' }: FileUpl
   // Initialize PDF.js worker
   useEffect(() => {
     const setupPdfWorker = async () => {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.min.mjs');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker.default;
     };
-    setupPdfWorker();
+    setupPdfWorker().catch(console.error);
   }, []);
 
   const processImage = async (file: File) => {
