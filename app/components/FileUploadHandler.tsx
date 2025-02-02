@@ -1,9 +1,12 @@
 import { useDropzone } from 'react-dropzone';
 import Tesseract from 'tesseract.js';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Upload, Loader2 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import * as pdfjsLib from 'pdfjs-dist';
+
+// Set the worker source once at the top level
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface FileUploadHandlerProps {
   onExtractedText: (text: string) => void;
@@ -12,14 +15,6 @@ interface FileUploadHandlerProps {
 
 export function FileUploadHandler({ onExtractedText, language = 'eng' }: FileUploadHandlerProps) {
   const [isProcessing, setIsProcessing] = useState(false);
-
-  // Initialize PDF.js worker
-  useEffect(() => {
-    const setupPdfWorker = async () => {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-    };
-    setupPdfWorker();
-  }, []);
 
   const processImage = async (file: File) => {
     // Map app languages to Tesseract language codes
