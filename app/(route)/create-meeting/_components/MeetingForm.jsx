@@ -13,7 +13,7 @@ import {
 import locationTypes from "../../../../app/_utils/LocationOption";
 import Link from "next/link";
 import ThemeOptions from "../../../../app/_utils/ThemeOptions";
-import { doc, getFirestore, setDoc } from "firebase/firestore";
+import { doc, getFirestore, setDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { app } from "../../../config/FirebaseConfig";
 import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
 import { toast } from "sonner";
@@ -39,7 +39,7 @@ function MeetingForm({ setFormValue }) {
   const [selectedTime, setSelectedTime] = useState(null);
   const [locationInputUrl, setLocationInputUrl] = useState("");
   const [doctorId, setDoctorId] = useState(null);
-  const [clinicType, setClinicType] = useState('Morning Clinic');
+  const [clinicType, setClinicType] = useState('Evening Clinic');
 
 
   const isBrowser = typeof window !== "undefined";
@@ -72,6 +72,7 @@ function MeetingForm({ setFormValue }) {
       themeColor,
       selectedDate: localStorage.getItem("selectedDate"),
       selectedTime: localStorage.getItem("selectedTime"),
+      clinicType: localStorage.getItem("clinicType") || 'Evening Clinic',
     };
 
     // Save to localStorage
@@ -169,27 +170,23 @@ function MeetingForm({ setFormValue }) {
   };
 
   const initiateZoomAuth = () => {
-    // Generate and store state parameter for security
     const state = Math.random().toString(36).substring(7);
     localStorage.setItem("zoom_auth_state", state);
 
-    // Get current doctorId from URL and current clinic type
     const urlParams = new URLSearchParams(window.location.search);
     const doctorId = urlParams.get("doctorId");
     const currentClinicType = localStorage.getItem("clinicType") || clinicType;
 
-    // Store values to preserve through auth flow
     if (doctorId) {
       localStorage.setItem("temp_doctor_id", doctorId);
     }
     localStorage.setItem("temp_clinic_type", currentClinicType);
 
-    // Construct Zoom OAuth URL
+    // Add required scopes to the authorization URL
     const zoomAuthUrl = `https://zoom.us/oauth/authorize?response_type=code&client_id=${ZOOM_CLIENT_ID}&redirect_uri=${encodeURIComponent(
       ZOOM_REDIRECT_URI
-    )}&state=${state}`;
+    )}&state=${state}&scope=meeting:write meeting:read`;
 
-    // Redirect to Zoom authorization page
     window.location.href = zoomAuthUrl;
   };
 
@@ -311,10 +308,15 @@ function MeetingForm({ setFormValue }) {
 
     try {
       const id = Date.now().toString();
-      // Get the clinic slot type from localStorage
       const selectedDate = localStorage.getItem("selectedDate");
       const selectedTime = localStorage.getItem("selectedTime");
-      const clinicSlot = localStorage.getItem("clinicType") || "Morning Clinic"; // Default to Morning Clinic if not set
+
+      // Verify the slot is still available
+      const isSlotAvailable = await checkSlotAvailability(selectedDate, selectedTime);
+      if (!isSlotAvailable) {
+        toast.error("This time slot is no longer available. Please select another time.");
+        return;
+      }
 
       await setDoc(doc(db, "MeetingEvent", id), {
         id: id,
@@ -322,15 +324,15 @@ function MeetingForm({ setFormValue }) {
         duration: duration,
         locationType: locationType,
         locationUrl: locationUrl,
-        selectedDate: selectedDate,
+        selectedDate: selectedDate, // This will be in YYYY-MM-DD format
         selectedTime: selectedTime,
         themeColor: themeColor,
         businessId: doc(db, "Business", user?.email),
         createdBy: user?.email,
         createdAt: new Date().toISOString(),
         doctorId: doctorId,
-        clinicSlot: clinicSlot, // Add clinic slot type
-        clinicTiming: getClinicTiming(doctorId, clinicSlot) // Add clinic timing
+        clinicType: 'Evening Clinic', // Always Evening Clinic for online meetings
+        clinicTiming: getClinicTiming(doctorId) // Updated to only return evening timing
       });
 
       toast.success("New Meeting Event Created!");
@@ -342,34 +344,34 @@ function MeetingForm({ setFormValue }) {
     }
   };
 
-  // Add helper function to get clinic timing based on doctor and slot
-  const getClinicTiming = (doctorId, clinicSlot) => {
+  // Add function to check slot availability
+  const checkSlotAvailability = async (selectedDate, selectedTime) => {
+    try {
+      const meetingsRef = collection(db, "MeetingEvent");
+      const q = query(meetingsRef, 
+        where("doctorId", "==", doctorId),
+        where("selectedDate", "==", selectedDate),
+        where("selectedTime", "==", selectedTime)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.empty; // Returns true if no meetings exist for this slot
+    } catch (error) {
+      console.error("Error checking slot availability:", error);
+      return false;
+    }
+  };
+
+  // Update getClinicTiming function to only return evening timing
+  const getClinicTiming = (doctorId) => {
     const doctorTimeSlots = {
-      '3': { 
-        'Morning Clinic': '8:30 AM - 9:30 AM', 
-        'Evening Clinic': '7:30 PM - 8:30 PM' 
-      },
-      '4': { 
-        'Morning Clinic': '8:00 AM - 9:00 AM',
-        'Evening Clinic': '11:00 AM - 1:00 PM',
-        'AfterNoon Clinic': '9:00 AM - 11:00 AM'
-      },
-      '5': {
-        'Morning Clinic': '8:30 AM - 11:00 AM',
-        'Evening Clinic': '7:00 PM - 9:00 PM'
-      },
-      '7': { 
-        'Morning Clinic': '8:00 AM - 10:45 AM' 
-      }
+      '3': '8:00 PM - 10:00 PM',
+      '4': '8:00 PM - 10:00 PM',
+      '5': '8:00 PM - 10:00 PM',
+      '7': '8:00 PM - 10:00 PM'
     };
 
-    // Default timings if doctor not found
-    const defaultTimings = {
-      'Morning Clinic': '9:00 AM - 12:00 PM',
-      'Evening Clinic': '1:00 PM - 6:00 PM'
-    };
-
-    return doctorTimeSlots[doctorId]?.[clinicSlot] || defaultTimings[clinicSlot] || 'Timing not specified';
+    return doctorTimeSlots[doctorId] || '8:00 PM - 10:00 PM';
   };
 
   return (
@@ -399,14 +401,8 @@ function MeetingForm({ setFormValue }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => setDuration(15)}>
-              15 Min
-            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setDuration(30)}>
               30 Min
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setDuration(45)}>
-              45 Min
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setDuration(60)}>
               60 Min
@@ -445,18 +441,21 @@ function MeetingForm({ setFormValue }) {
           </>
         )}
 
-        <h2 className="font-bold">Select Theme Color</h2>
-        <div className="flex justify-evenly">
-          {ThemeOptions.map((color, index) => (
-            <div
-              key={index}
-              className={`h-7 w-7 rounded-full ${
-                themeColor === color && " border-4 border-black"
-              }`}
-              style={{ backgroundColor: color }}
-              onClick={() => setThemeColor(color)}
-            ></div>
-          ))}
+        <div className="flex flex-col gap-4">
+          <h2 className="font-bold">Select Theme Color</h2>
+          <div className="grid grid-cols-6 gap-4">
+            {ThemeOptions.map((color, index) => (
+              <button
+                key={index}
+                className={`w-10 h-10 rounded-full transition-all duration-200 hover:scale-110 ${
+                  themeColor === color ? 'ring-2 ring-offset-2 ring-black' : ''
+                }`}
+                style={{ backgroundColor: color }}
+                onClick={() => setThemeColor(color)}
+                title={`Theme Color ${index + 1}`}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
