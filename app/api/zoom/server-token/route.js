@@ -1,30 +1,18 @@
 import axios from "axios";
 
-export async function POST(request) {
+export async function GET() {
   try {
-    const { code } = await request.json();
-    
     // Encode client credentials
     const credentials = Buffer.from(
       `${process.env.NEXT_PUBLIC_ZOOM_CLIENT_ID}:${process.env.NEXT_PUBLIC_ZOOM_CLIENT_SECRET}`
     ).toString('base64');
 
-    // Use the exact same redirect URI as in the authorization request
-    const redirectUri = process.env.NEXT_PUBLIC_ZOOM_REDIRECT_URI;
-    console.log('Using redirect URI:', redirectUri); // Debug log
-
-    // Construct token request
-    const tokenParams = new URLSearchParams({
-      grant_type: 'authorization_code',
-      code: code,
-      redirect_uri: redirectUri
-    });
-
-    console.log('Token request params:', tokenParams.toString()); // Debug log
-
     const response = await axios.post(
       'https://zoom.us/oauth/token',
-      tokenParams.toString(),
+      new URLSearchParams({
+        grant_type: 'account_credentials',
+        account_id: process.env.NEXT_PUBLIC_ZOOM_ACCOUNT_ID // Make sure to add this to .env.local
+      }).toString(),
       {
         headers: {
           'Authorization': `Basic ${credentials}`,
@@ -39,10 +27,10 @@ export async function POST(request) {
     });
 
   } catch (error) {
-    console.error("Token exchange error:", error.response?.data || error.message);
+    console.error("Server token error:", error.response?.data || error.message);
     return new Response(
       JSON.stringify({ 
-        error: "Failed to exchange authorization code",
+        error: "Failed to get server token",
         details: error.response?.data || error.message 
       }), 
       { 
@@ -51,4 +39,4 @@ export async function POST(request) {
       }
     );
   }
-}
+} 

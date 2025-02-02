@@ -77,6 +77,7 @@ export async function POST(request) {
       role: "system",
       content: `
 You are an advanced medical assistant chatbot with the following capabilities and rules:
+The output should be concise and precise and not exceed 2 lines.
 
 1. Language & Communication:
    - Primary Response Language: ${SUPPORTED_LANGUAGES[language]}
