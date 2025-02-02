@@ -3,97 +3,110 @@ import { useState, useEffect } from 'react';
 import ChatInterface from '../components/ChatInterface';
 
 const DietPlanner = () => {
-    const [isFormSubmitted, setIsFormSubmitted] = useState(false);
-    const [formData, setFormData] = useState(null);
-    const [iframeHeight, setIframeHeight] = useState("800px");
+    // State Management
+    const [uiState, setUIState] = useState({
+        isFormSubmitted: false,
+        formData: null,
+        iframeHeight: "800px"
+    });
 
-    useEffect(() => {
-        // Function to handle JotForm messages
-        const handleMessage = (event) => {
-            // Only accept messages from JotForm domain
-            if (!event.origin.includes('jotform.com')) return;
+    // Constants
+    const JOTFORM_ID = "250282260962455";
+    const JOTFORM_SCRIPT_URL = "https://cdn.jotfor.ms/js/vendor/imageinfo.js";
+
+    // Handle incoming messages from JotForm
+    const handleJotFormMessage = (event) => {
+        if (!event.origin.includes('jotform.com')) return;
+        
+        console.log("Received message:", event.data);
+        
+        // Handle iframe height adjustment
+        if (typeof event.data === 'string') {
+            const [action, height] = event.data.split(':');
+            if (action === 'setHeight') {
+                setUIState(prev => ({
+                    ...prev,
+                    iframeHeight: `${parseInt(height) + 30}px`
+                }));
+            }
+        }
+
+        // Handle form submission
+        if (isFormSubmissionComplete(event.data)) {
+            handleFormSubmission();
+        }
+    };
+
+    // Check if form submission is complete
+    const isFormSubmissionComplete = (data) => {
+        return (
+            (typeof data === 'object' && data.action === "submission-completed") ||
+            (typeof data === 'string' && data.includes('submission-completed'))
+        );
+    };
+
+    // Process form submission
+    const handleFormSubmission = () => {
+        console.log("Form submission detected");
+        
+        try {
+            const submissionData = {
+                timestamp: new Date().toISOString(),
+                formId: JOTFORM_ID
+            };
             
-            console.log("Received message:", event.data);
+            console.log("Form data:", submissionData);
+            
+            // Transition to chat interface with delay
+            setTimeout(() => {
+                setUIState(prev => ({
+                    ...prev,
+                    formData: submissionData,
+                    isFormSubmitted: true
+                }));
+                console.log("Switching to chat interface");
+            }, 2000);
+        } catch (error) {
+            console.error("Error handling form submission:", error);
+        }
+    };
 
-            // Parse the message if it's a string
-            let data = event.data;
-            if (typeof event.data === 'string') {
-                const parts = event.data.split(':');
-                if (parts[0] === 'setHeight') {
-                    setIframeHeight(`${parseInt(parts[1]) + 30}px`);
-                }
-            }
+    // Initialize JotForm
+    const initializeJotForm = () => {
+        const script = document.createElement('script');
+        script.src = JOTFORM_SCRIPT_URL;
+        script.async = true;
+        document.body.appendChild(script);
+    };
 
-            // Check for form submission
-            if (
-                (typeof event.data === 'object' && event.data.action === "submission-completed") ||
-                (typeof event.data === 'string' && event.data.includes('submission-completed'))
-            ) {
-                console.log("Form submission detected");
+    // Setup effect
+    useEffect(() => {
+        window.addEventListener('message', handleJotFormMessage);
+        initializeJotForm();
 
-                // Get the form data from the submission
-                let submittedData = {};
-                try {
-                    // For demonstration, create some sample data
-                    // In production, you should get this from the actual form submission
-                    submittedData = {
-                        timestamp: new Date().toISOString(),
-                        formId: "250282260962455",
-                        // Add any other relevant data you want to pass to the chat interface
-                    };
-                    
-                    console.log("Form data:", submittedData);
-                    
-                    // Switch to chat interface after a short delay
-                    setTimeout(() => {
-                        setFormData(submittedData);
-                        setIsFormSubmitted(true);
-                        console.log("Switching to chat interface");
-                    }, 2000); // 2 second delay to show the thank you message
-                } catch (error) {
-                    console.error("Error handling form submission:", error);
-                }
-            }
-        };
-
-        // Add JotForm script
-        const addJotFormScript = () => {
-            const script = document.createElement('script');
-            script.src = "https://cdn.jotfor.ms/js/vendor/imageinfo.js";
-            script.async = true;
-            document.body.appendChild(script);
-        };
-
-        // Add event listeners
-        window.addEventListener('message', handleMessage);
-        addJotFormScript();
-
-        // Cleanup
-        return () => {
-            window.removeEventListener('message', handleMessage);
-        };
+        return () => window.removeEventListener('message', handleJotFormMessage);
     }, []);
 
     return (
         <div className="min-h-screen p-6 bg-gray-100">
             <div className="max-w-4xl mx-auto">
                 <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">
-                    {isFormSubmitted ? 'Your AI Diet Assistant' : 'Diet Planner'}
+                    {uiState.isFormSubmitted ? 'Your AI Diet Assistant' : 'Diet Planner'}
                 </h1>
                 
-                {!isFormSubmitted ? (
+                {!uiState.isFormSubmitted ? (
                     <div className="bg-white rounded-lg shadow-md p-6">
                         <iframe
-                            id="JotFormIFrame-250282260962455"
+                            id={`JotFormIFrame-${JOTFORM_ID}`}
                             title="Diet Consultation Form"
                             allowtransparency="true"
                             allow="geolocation; microphone; camera; fullscreen"
-                            src="https://form.jotform.com/250282260962455"
+                            src={`https://form.jotform.com/${JOTFORM_ID}`}
                             frameBorder="0"
                             scrolling="yes"
                             style={{
                                 width: "100%",
-                                height: iframeHeight,
+                                height: uiState.iframeHeight,
                                 border: "none",
                                 margin: 0,
                                 padding: 0,
@@ -107,7 +120,7 @@ const DietPlanner = () => {
                         <p className="text-center text-gray-600 mb-4">
                             Form submitted successfully! Starting your AI diet consultation...
                         </p>
-                        <ChatInterface formData={formData} />
+                        <ChatInterface formData={uiState.formData} />
                     </div>
                 )}
             </div>
