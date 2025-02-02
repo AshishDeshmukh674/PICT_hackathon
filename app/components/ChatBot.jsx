@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Mic, StopCircle, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
@@ -131,7 +131,7 @@ const NUMBER_WORDS = {
   },
   gu: {
     'એક': '1', 'બે': '2', 'ત્રણ': '3', 'ચાર': '4', 'પાંચ': '5',
-    'છ': '6', 'સાત': '7', 'આઠ': '8', 'નવ': '9', 'દસ': '10'
+    'છ': '6', 'सात': '7', 'आठ': '8', 'નવ': '9', 'દસ': '10'
   },
   en: {
     'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5',
@@ -531,6 +531,9 @@ export default function ChatBot({ isOpen, onClose }) {
     email: "",
     date: ""
   });
+  const [isSpacebarPressed, setIsSpacebarPressed] = useState(false);
+  const [spacebarPressTime, setSpacebarPressTime] = useState(null);
+  const HOLD_DURATION = 3000; // 3 seconds in milliseconds
 
   const forceLoadVoices = () => {
     return new Promise((resolve) => {
@@ -1323,6 +1326,90 @@ export default function ChatBot({ isOpen, onClose }) {
     }
   };
 
+  useEffect(() => {
+    let spacebarTimer;
+
+    const handleKeyDown = (e) => {
+      if (e.code === 'Space' && !isSpacebarPressed) {
+        e.preventDefault(); // Prevent page scrolling
+        setIsSpacebarPressed(true);
+        setSpacebarPressTime(Date.now());
+      }
+    };
+
+    const handleKeyUp = (e) => {
+      if (e.code === 'Space') {
+        const pressDuration = Date.now() - spacebarPressTime;
+        
+        if (pressDuration >= HOLD_DURATION) {
+          if (!isOpen) {
+            // First time opening - open chat and read welcome message
+            onClose(false);
+            speak(TRANSLATIONS[selectedLanguage].welcome);
+          } else {
+            // Start voice recognition every time spacebar is held
+            if (isRecording) {
+              if (recognitionRef.current?.started) {
+                recognitionRef.current.stop();
+              }
+              setIsRecording(false);
+            } else {
+              startVoiceRecognition();
+            }
+          }
+        }
+        
+        setIsSpacebarPressed(false);
+        setSpacebarPressTime(null);
+      }
+    };
+
+    // Visual feedback while holding spacebar
+    const checkSpacebarHold = () => {
+      if (isSpacebarPressed && spacebarPressTime) {
+        const currentDuration = Date.now() - spacebarPressTime;
+        if (currentDuration >= HOLD_DURATION) {
+          // Add visual feedback that the duration has been reached
+          document.body.style.cursor = 'wait';
+        }
+      }
+    };
+
+    spacebarTimer = setInterval(checkSpacebarHold, 100);
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      clearInterval(spacebarTimer);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      document.body.style.cursor = 'default';
+    };
+  }, [isSpacebarPressed, spacebarPressTime, isOpen, selectedLanguage]);
+
+  // Add visual feedback component for spacebar hold
+  const SpacebarHoldIndicator = () => {
+    if (!isSpacebarPressed || !spacebarPressTime) return null;
+
+    const currentDuration = Date.now() - spacebarPressTime;
+    const progress = Math.min((currentDuration / HOLD_DURATION) * 100, 100);
+
+    return (
+      <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-lg">
+        <div className="text-center mb-2">
+          {progress >= 100 ? 'Release to activate' : 'Hold spacebar...'}
+        </div>
+        <div className="w-48 h-2 bg-gray-700 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-blue-500 transition-all duration-100"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+    );
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -1403,6 +1490,7 @@ export default function ChatBot({ isOpen, onClose }) {
             </div>
             {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
           </div>
+          <SpacebarHoldIndicator />
         </motion.div>
       )}
     </AnimatePresence>
