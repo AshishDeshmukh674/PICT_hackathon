@@ -108,20 +108,19 @@ function MeetingForm({ setFormValue }) {
   const clearMeetingDetails = () => {
     if (!isBrowser) return;
 
-    // Clear all meeting-specific details but keep auth tokens
-    const zoomToken = localStorage.getItem("zoomAccessToken");
-    localStorage.clear();
-    if (zoomToken) {
-      localStorage.setItem("zoomAccessToken", zoomToken);
-    }
-
-    // Reset state
+    // Clear only form-related data, no need to handle Zoom tokens
     setEventName("");
     setDuration(30);
     setLocationType("");
     setLocationUrl("");
     setThemeColor("");
-    localStorage.removeItem("clinicType"); // Clear clinic type
+    setLocationInputUrl("");
+    
+    // Clear form-related localStorage items
+    localStorage.removeItem("locationType");
+    localStorage.removeItem("clinicType");
+    localStorage.removeItem("selectedDate");
+    localStorage.removeItem("selectedTime");
   };
 
   const handleZoomAuth = async (authCode, doctorId) => {
@@ -151,74 +150,28 @@ function MeetingForm({ setFormValue }) {
 
   const handleLocationUrl = async (type) => {
     setLocationType(type);
+    // Keep this as it's for form state
     localStorage.setItem("locationType", type);
 
-      const accessToken = localStorage.getItem("zoomAccessToken");
-      if (accessToken) {
-        // If we have a token, try to create meeting
-        const url = await createZoomMeeting(accessToken);
+    try {
+      // Get fresh server token each time
+      const tokenResponse = await axios.get("/api/zoom/server-token");
+      if (tokenResponse.data.access_token) {
+        const url = await createZoomMeeting(tokenResponse.data.access_token);
         if (url) {
           setLocationUrl(url);
           setLocationInputUrl(url);
-          localStorage.setItem("locationUrl", url);
+          // Update form state directly without localStorage
           setFormValue((prev) => ({ ...prev, locationUrl: url }));
         }
       } else {
-        // If no token, initiate Zoom authorization
-      initiateZoomAuth();
-    }
-  };
-
-  const initiateZoomAuth = () => {
-    const state = Math.random().toString(36).substring(7);
-    localStorage.setItem("zoom_auth_state", state);
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const doctorId = urlParams.get("doctorId");
-    const currentClinicType = localStorage.getItem("clinicType") || clinicType;
-
-    if (doctorId) {
-      localStorage.setItem("temp_doctor_id", doctorId);
-    }
-    localStorage.setItem("temp_clinic_type", currentClinicType);
-
-    // Add required scopes to the authorization URL
-    const zoomAuthUrl = `https://zoom.us/oauth/authorize?response_type=code&client_id=${ZOOM_CLIENT_ID}&redirect_uri=${encodeURIComponent(
-      ZOOM_REDIRECT_URI
-    )}&state=${state}&scope=meeting:write meeting:read`;
-
-    window.location.href = zoomAuthUrl;
-  };
-
-  // Update the Zoom callback handler
-  useEffect(() => {
-    const handleZoomCallback = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get("code");
-      const state = urlParams.get("state");
-      const storedState = localStorage.getItem("zoom_auth_state");
-      const storedDoctorId = localStorage.getItem("temp_doctor_id");
-      const storedClinicType = localStorage.getItem("temp_clinic_type");
-
-      if (code && state && state === storedState) {
-        // Clear the stored values
-        localStorage.removeItem("zoom_auth_state");
-        localStorage.removeItem("temp_doctor_id");
-        localStorage.removeItem("temp_clinic_type");
-
-        // Restore clinic type
-        if (storedClinicType) {
-          localStorage.setItem("clinicType", storedClinicType);
-          setClinicType(storedClinicType);
-        }
-
-        // Handle the authorization code
-        await handleZoomAuth(code, storedDoctorId);
+        throw new Error("Failed to get access token");
       }
-    };
-
-    handleZoomCallback();
-  }, []);
+    } catch (error) {
+      console.error("Error creating Zoom meeting:", error);
+      toast.error("Failed to create Zoom meeting");
+    }
+  };
 
   const createZoomMeeting = async (accessToken) => {
     try {
@@ -237,45 +190,12 @@ function MeetingForm({ setFormValue }) {
       });
 
       if (response.data.join_url) {
-        setLocationUrl(response.data.join_url);
-        setLocationInputUrl(response.data.join_url);
-        localStorage.setItem("locationUrl", response.data.join_url);
-        setFormValue((prev) => ({
-          ...prev,
-          locationUrl: response.data.join_url,
-        }));
         return response.data.join_url;
       }
     } catch (error) {
-      if (error.response?.status === 401) {
-        // Token expired, try to refresh
-        try {
-          const refreshToken = localStorage.getItem("zoomRefreshToken");
-          const refreshResponse = await axios.post("/api/zoom/refresh-token", {
-            refresh_token: refreshToken,
-          });
-
-          if (refreshResponse.data.access_token) {
-            localStorage.setItem(
-              "zoomAccessToken",
-              refreshResponse.data.access_token
-            );
-            localStorage.setItem(
-              "zoomRefreshToken",
-              refreshResponse.data.refresh_token
-            );
-            // Retry the meeting creation with new token
-            return createZoomMeeting(refreshResponse.data.access_token);
-          }
-        } catch (refreshError) {
-          console.error("Token refresh failed:", refreshError);
-          toast.error("Session expired. Please reconnect with Zoom");
-          initiateZoomAuth();
-        }
-      } else {
-        console.error("Error creating Zoom meeting:", error);
-        toast.error("Failed to create Zoom meeting");
-      }
+      console.error("Error creating Zoom meeting:", error);
+      toast.error("Failed to create Zoom meeting");
+      return null;
     }
   };
 
@@ -401,8 +321,14 @@ function MeetingForm({ setFormValue }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
+            <DropdownMenuItem onClick={() => setDuration(15)}>
+              15 Min
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setDuration(30)}>
               30 Min
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setDuration(45)}>
+              45 Min
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setDuration(60)}>
               60 Min

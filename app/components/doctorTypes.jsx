@@ -1,5 +1,15 @@
 // Dictionary of doctor types with their descriptions and common conditions treated
 const doctorTypes = {
+  GENERAL_PHYSICIAN: {
+        keywords: ['general', 'fever', 'cold', 'cough', 'flu', 'headache', 'body pain', 'weakness'],
+        specialties: ['Diagnosis and treatment of common illnesses', 'General health checkups', 'Preventive care', 'Management of chronic diseases like diabetes and hypertension', 'Basic wound care', 'Prescription of medications', 'Referral to specialists if needed'],
+        alternateNames: ['General Practitioner', 'Primary Care Physician', 'Family Doctor', 'Internist']
+    },
+    PULMONOLOGIST: {
+        keywords: ['lung', 'breathing', 'respiratory', 'asthma', 'pneumonia', 'bronchitis'],
+        specialties: ['Diagnosis and treatment of lung diseases', 'Asthma management', 'COPD (Chronic Obstructive Pulmonary Disease) treatment', 'Pulmonary function testing', 'Sleep apnea treatment', 'Bronchoscopy procedures', 'Tuberculosis (TB) management'],
+        alternateNames: ['Lung Specialist', 'Respiratory Physician', 'Chest Physician', 'Pulmonary Doctor']
+    },
     'Primary Care': {
       description: 'General healthcare provider for routine checkups and basic medical care',
       specialties: ['Annual physicals', 'Preventive care', 'Basic illness treatment'],
@@ -127,6 +137,5 @@ const doctorTypes = {
   // Example usage:
   // const llmResponse = "You should see a heart doctor for your condition";
   // const doctorType = extractDoctorType(llmResponse);
-  // console.log(doctorType); // Output: "Cardiologist"
-  
+  // console.log(doctorType); // Output: "Cardiologist"  
   export { doctorTypes, extractDoctorType };
