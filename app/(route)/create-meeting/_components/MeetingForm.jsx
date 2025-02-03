@@ -19,12 +19,6 @@ import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
-const ZOOM_CLIENT_ID = process.env.NEXT_PUBLIC_ZOOM_CLIENT_ID;
-const ZOOM_REDIRECT_URI =
-  process.env.NEXT_PUBLIC_ZOOM_REDIRECT_URI ||
-  "http://localhost:3000/create-meeting";
-
-
 function MeetingForm({ setFormValue }) {
   const [location, setLocation] = useState();
   const [themeColor, setThemeColor] = useState("");
@@ -41,24 +35,7 @@ function MeetingForm({ setFormValue }) {
   const [doctorId, setDoctorId] = useState(null);
   const [clinicType, setClinicType] = useState('Evening Clinic');
 
-
   const isBrowser = typeof window !== "undefined";
-
-  useEffect(() => {
-    // Only load Zoom auth token, clear other meeting details
-    const zoomToken = localStorage.getItem("zoomAccessToken");
-
-    // Check for Zoom authorization code only once
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const authCode = urlParams.get("code");
-      const doctorId = urlParams.get("doctorId"); // Get doctorId from URL
-      
-      if (authCode && !zoomToken) {
-        handleZoomAuth(authCode, doctorId); // Pass doctorId to handleZoomAuth
-      }
-    }
-  }, []);
 
   // Update the effect to sync with localStorage
   useEffect(() => {
@@ -108,7 +85,6 @@ function MeetingForm({ setFormValue }) {
   const clearMeetingDetails = () => {
     if (!isBrowser) return;
 
-    // Clear only form-related data, no need to handle Zoom tokens
     setEventName("");
     setDuration(30);
     setLocationType("");
@@ -116,67 +92,18 @@ function MeetingForm({ setFormValue }) {
     setThemeColor("");
     setLocationInputUrl("");
     
-    // Clear form-related localStorage items
     localStorage.removeItem("locationType");
     localStorage.removeItem("clinicType");
     localStorage.removeItem("selectedDate");
     localStorage.removeItem("selectedTime");
   };
 
-  const handleZoomAuth = async (authCode, doctorId) => {
-    try {
-      // Preserve doctorId when clearing URL parameters
-      const newUrl = doctorId 
-        ? `/create-meeting?doctorId=${doctorId}`
-        : '/create-meeting';
-      window.history.replaceState({}, document.title, newUrl);
-
-      const response = await axios.post("/api/zoom/token", {
-        code: authCode,
-      });
-
-      if (response.data.access_token) {
-        localStorage.setItem("zoomAccessToken", response.data.access_token);
-        localStorage.setItem("zoomRefreshToken", response.data.refresh_token);
-        await createZoomMeeting(response.data.access_token);
-      } else {
-        throw new Error(response.data.error || "Failed to get access token");
-      }
-    } catch (error) {
-      console.error("Zoom authorization error:", error);
-      toast.error("Failed to authorize with Zoom");
-    }
-  };
-
   const handleLocationUrl = async (type) => {
     setLocationType(type);
-    // Keep this as it's for form state
     localStorage.setItem("locationType", type);
 
     try {
-      // Get fresh server token each time
-      const tokenResponse = await axios.get("/api/zoom/server-token");
-      if (tokenResponse.data.access_token) {
-        const url = await createZoomMeeting(tokenResponse.data.access_token);
-        if (url) {
-          setLocationUrl(url);
-          setLocationInputUrl(url);
-          // Update form state directly without localStorage
-          setFormValue((prev) => ({ ...prev, locationUrl: url }));
-        }
-      } else {
-        throw new Error("Failed to get access token");
-      }
-    } catch (error) {
-      console.error("Error creating Zoom meeting:", error);
-      toast.error("Failed to create Zoom meeting");
-    }
-  };
-
-  const createZoomMeeting = async (accessToken) => {
-    try {
       const response = await axios.post("/api/zoom/create-meeting", {
-        accessToken,
         meetingData: {
           topic: eventName || "New Meeting",
           duration: duration,
@@ -190,16 +117,18 @@ function MeetingForm({ setFormValue }) {
       });
 
       if (response.data.join_url) {
-        return response.data.join_url;
+        setLocationUrl(response.data.join_url);
+        setLocationInputUrl(response.data.join_url);
+        setFormValue((prev) => ({ ...prev, locationUrl: response.data.join_url }));
+      } else {
+        throw new Error("Failed to create Zoom meeting");
       }
     } catch (error) {
       console.error("Error creating Zoom meeting:", error);
       toast.error("Failed to create Zoom meeting");
-      return null;
     }
   };
 
-  // Update the isFormValid function
   const isFormValid = () => {
     if (typeof window === 'undefined') return false;
 

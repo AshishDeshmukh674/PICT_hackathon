@@ -1,14 +1,43 @@
 import { NextResponse } from "next/server";
 import axios from "axios";
 
+const ZOOM_ACCOUNT_ID = process.env.NEXT_PUBLIC_ZOOM_ACCOUNT_ID;
+const ZOOM_CLIENT_ID = process.env.NEXT_PUBLIC_ZOOM_CLIENT_ID;
+const ZOOM_CLIENT_SECRET = process.env.NEXT_PUBLIC_ZOOM_CLIENT_SECRET;
+
+async function getServerToServerToken() {
+  const auth = Buffer.from(`${ZOOM_CLIENT_ID}:${ZOOM_CLIENT_SECRET}`).toString('base64');
+  
+  try {
+    const response = await axios.post(
+      'https://zoom.us/oauth/token',
+      'grant_type=account_credentials&account_id=' + ZOOM_ACCOUNT_ID,
+      {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+    
+    return response.data.access_token;
+  } catch (error) {
+    console.error('Error getting Zoom access token:', error);
+    throw error;
+  }
+}
+
 export async function POST(request) {
   try {
-    const { accessToken, meetingData } = await request.json();
+    const { meetingData } = await request.json();
+    
+    // Get server-to-server token
+    const accessToken = await getServerToServerToken();
 
     if (!accessToken) {
       return NextResponse.json(
-        { error: "Access token is required" },
-        { status: 400 }
+        { error: "Failed to get Zoom access token" },
+        { status: 500 }
       );
     }
 
