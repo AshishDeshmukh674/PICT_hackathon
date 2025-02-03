@@ -550,86 +550,71 @@ export default function ChatBot({ isOpen, onClose }) {
   };
 
   const speak = async (text) => {
-    if (!text || typeof window === 'undefined') return;
-    
-    try {
-      // Cancel any ongoing speech
-      if (speechSynthesis.speaking) {
-        speechSynthesis.cancel();
-        await new Promise(resolve => setTimeout(resolve, 100)); // Small delay after canceling
-      }
-
-      const voices = await forceLoadVoices();
-      if (!voices.length) {
-        console.warn('No voices available');
-        return;
-      }
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      
-      // Get language configuration
-      const langConfig = ['mr', 'gu'].includes(selectedLanguage) ? 
-        languageConfig.hi : 
-        languageConfig[selectedLanguage] || languageConfig.en;
-
-      // Find appropriate voice
-      let selectedVoice = voices.find(voice => 
-        langConfig.preferredVoices.some(preferred => 
-          voice.name.includes(preferred) || voice.voiceURI.includes(preferred)
-        )
-      );
-
-      // Fallback to language match if no preferred voice
-      if (!selectedVoice) {
-        selectedVoice = voices.find(voice => 
-          langConfig.fallbackLangs.some(lang => voice.lang.startsWith(lang))
-        );
-      }
-
-      // Final fallback to any available voice
-      if (!selectedVoice && voices.length > 0) {
-        selectedVoice = voices[0];
-      }
-
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
+    if ("speechSynthesis" in window) {
+      try {
+        if (speechSynthesis.speaking) {
+          speechSynthesis.cancel();
+        }
+  
+        const voices = await forceLoadVoices();
+        const utterance = new SpeechSynthesisUtterance(text);
+        
+        // Force Hindi voice for Marathi and Gujarati
+        const langConfig = ['mr', 'gu'].includes(selectedLanguage) ? 
+          languageConfig.hi : 
+          languageConfig[selectedLanguage] || languageConfig.en;
+  
         utterance.lang = langConfig.lang;
-        utterance.rate = 0.9;
+        
+        // Find the best matching voice
+        let selectedVoice = null;
+  
+        // First try preferred voices
+        for (const preferredVoice of langConfig.preferredVoices) {
+          selectedVoice = voices.find(voice => 
+            voice.name.includes(preferredVoice) || 
+            voice.voiceURI.includes(preferredVoice)
+          );
+          if (selectedVoice) break;
+        }
+  
+        // Then try language fallbacks
+        if (!selectedVoice) {
+          for (const fallbackLang of langConfig.fallbackLangs) {
+            selectedVoice = voices.find(voice => 
+              voice.lang.startsWith(fallbackLang)
+            );
+            if (selectedVoice) break;
+          }
+        }
+  
+        // Final fallback to any available voice
+        if (!selectedVoice) {
+          selectedVoice = voices[0];
+        }
+  
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
+          console.log(`Using voice: ${selectedVoice.name} (${selectedVoice.lang})`);
+        }
+  
+
+        utterance.rate = selectedLanguage === 'en' ? 1 : 0.9;
         utterance.pitch = 1;
         utterance.volume = 1;
 
-        setIsSpeaking(true);
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = () => setIsSpeaking(false);
+        utterance.onerror = (event) => {
+          console.error('Speech synthesis error:', event);
+          setIsSpeaking(false);
+        };
 
-        return new Promise((resolve, reject) => {
-          utterance.onend = () => {
-            setIsSpeaking(false);
-            resolve();
-          };
-
-          utterance.onerror = (event) => {
-            const errorDetails = {
-              type: event.type,
-              timeStamp: event.timeStamp,
-              error: event.error,
-              message: 'Speech synthesis failed'
-            };
-            console.warn('Speech synthesis error:', errorDetails);
-            setIsSpeaking(false);
-            resolve(); // Resolve instead of reject to prevent error cascade
-          };
-
-          try {
-            speechSynthesis.speak(utterance);
-          } catch (error) {
-            console.warn('Speech synthesis speak error:', error);
-            setIsSpeaking(false);
-            resolve();
-          }
-        });
+        speechSynthesis.speak(utterance);
+      } catch (error) {
+        console.error('Error in speak function:', error);
+        setIsSpeaking(false);
       }
-    } catch (error) {
-      console.warn('Speech synthesis setup error:', error);
-      setIsSpeaking(false);
     }
   };
 
@@ -658,62 +643,104 @@ export default function ChatBot({ isOpen, onClose }) {
     };
   }, []);
 
-  const setupVoiceRecognition = () => {
-    if (!recognitionRef.current && typeof window !== 'undefined') {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        
-        // Set language based on selected language
-        recognition.lang = selectedLanguage === "en" ? "en-US" : 
-                          selectedLanguage === "hi" ? "hi-IN" : 
-                          selectedLanguage === "mr" ? "mr-IN" : 
-                          selectedLanguage === "gu" ? "gu-IN" : "en-US";
-
-        recognition.onresult = (event) => {
-          const transcript = event.results[0][0].transcript;
-          setUserInput(transcript);
-          handleUserInput(transcript);
-        };
-
-        recognition.onerror = (event) => {
-          console.warn('Voice recognition error:', event.error);
-          setError("Voice recognition failed. Please try again or type your message.");
-          setIsRecording(false);
-        };
-
-        recognition.onend = () => {
-          setIsRecording(false);
-        };
-
-        recognitionRef.current = recognition;
-      }
-    }
-  };
-
-  const startVoiceRecognition = () => {
-    setupVoiceRecognition();
-    
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.start();
-        setIsRecording(true);
-        setError(null);
-      } catch (error) {
-        console.warn("Failed to start recognition:", error);
-        setError("Please wait a moment before trying voice input again.");
-        setIsRecording(false);
-        
-        // Reset recognition instance
-        recognitionRef.current = null;
-        setupVoiceRecognition();
-      }
-    } else {
+  useEffect(() => {
+    if (!("webkitSpeechRecognition" in window)) {
       setError("Voice recognition is not supported in your browser.");
+      return;
     }
-  };
+  
+    const recognition = new webkitSpeechRecognition();
+    recognition.continuous = false;
+    recognition.lang = selectedLanguage === "en" ? "en-US" : 
+                      selectedLanguage === "hi" ? "hi-IN" : 
+                      selectedLanguage === "mr" ? "mr-IN" : 
+                      selectedLanguage === "gu" ? "gu-IN" : "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    // Add a longer timeout for speech detection
+    recognition.speechTimeout = 5000; // 5 seconds to start speaking
+ 
+    recognition.onresult = async (event) => {
+      const transcript = event.results[0][0].transcript;
+      const cleanedInput = cleanInputText(transcript);
+      setUserInput(cleanedInput);
+      
+      try {
+        if (bookingStep > 0) {
+          await handleBookingFlow(cleanedInput);
+        } else if (cancelStep > 0) {
+          await handleCancellationFlow(cleanedInput);
+        } else {
+          await handleUserInput(cleanedInput);
+        }
+      } catch (error) {
+        console.error("Error processing voice input:", error);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
+      
+      // Handle different types of errors
+      switch (event.error) {
+        case 'no-speech':
+          setError("No speech was detected. Please try again and speak clearly.");
+          break;
+        case 'audio-capture':
+          setError("No microphone was found. Ensure it is plugged in and allowed.");
+          break;
+        case 'not-allowed':
+          setError("Microphone permission was denied. Please allow microphone access.");
+          break;
+        case 'network':
+          setError("Network error occurred. Please check your internet connection.");
+          break;
+        case 'aborted':
+          // Don't show error for user-initiated stops
+          break;
+        default:
+          setError("Voice recognition failed. Please try again.");
+      }
+      
+      setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      // Only restart if we're in booking/cancel flow and not processing
+      if ((bookingStep > 0 || cancelStep > 0) && !error) {
+        setTimeout(() => {
+          try {
+            if (!recognition.started) {
+              recognition.start();
+              setIsRecording(true);
+            }
+          } catch (error) {
+            console.error("Failed to restart recognition:", error);
+          }
+        }, 1000);
+      }
+    };
+
+    recognition.onstart = () => {
+      recognition.started = true;
+      setError(null); // Clear any previous errors when starting new recognition
+      // Add a visual indicator that the bot is listening
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: "Listening... Please speak now." 
+      }]);
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      if (recognition.started) {
+        recognition.stop();
+      }
+    };
+  }, [bookingStep, cancelStep, selectedLanguage]);
 
   const handleUserInput = async (input) => {
     if (!input.trim()) return;
@@ -778,7 +805,7 @@ export default function ChatBot({ isOpen, onClose }) {
           const doctorType = extractDoctorType(llmResponse);
           console.log(doctorType);
           if(doctorType){
-            try{doctorlist = await GlobalApi.getDoctorByCategory(doctorType);
+            try{doctorlist_ = await GlobalApi.getDoctorByCategory(doctorType);
             await speak(doctorlist)
             setChatHistory(prev => [...prev, { 
               role: "assistant", 
@@ -1155,6 +1182,29 @@ export default function ChatBot({ isOpen, onClose }) {
     }
   };
 
+  const startVoiceRecognition = () => {
+    if (recognitionRef.current && !recognitionRef.current.started) {
+      try {
+        recognitionRef.current.start();
+        setIsRecording(true);
+      } catch (error) {
+        console.error("Failed to start recognition:", error);
+        setError("Failed to start voice recognition. Please try again.");
+      }
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      if (recognitionRef.current?.started) {
+        recognitionRef.current.stop();
+      }
+      setIsRecording(false);
+    } else {
+      startVoiceRecognition();
+    }
+  };
+
   const handleExtractedText = async (text) => {
     if (!text.trim()) return;
     
@@ -1421,7 +1471,7 @@ export default function ChatBot({ isOpen, onClose }) {
                 <Button onClick={() => handleUserInput(userInput)}>
                   <Send className="w-4 h-4" />
                 </Button>
-                <Button variant="outline" onClick={startVoiceRecognition}>
+                <Button variant="outline" onClick={toggleRecording}>
                   {isRecording ? 
                     <StopCircle className="w-4 h-4 text-red-500" /> : 
                     <Mic className="w-4 h-4" />
