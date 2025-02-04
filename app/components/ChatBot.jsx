@@ -529,7 +529,7 @@ const isValidDoctorResponse = (response) => {
          response.data.data.every(doc => doc.id && doc.attributes?.Name);
 };
 
-export default function ChatBot({ isOpen, onClose }) {
+export default function ChatBot({ isOpen, onClose, onOpen }) {
   const [userInput, setUserInput] = useState("");
   const [chatHistory, setChatHistory] = useState([
     { role: "assistant", content: TRANSLATIONS.en.welcome }
@@ -581,6 +581,13 @@ export default function ChatBot({ isOpen, onClose }) {
 
     return () => unsubscribe();
   }, []);
+  const [spacebarCount, setSpacebarCount] = useState(0);
+  const [lastSpaceTime, setLastSpaceTime] = useState(0);
+  const [isTyping, setIsTyping] = useState(false);
+  const spacebarTimeoutRef = useRef(null);
+  const [canStartRecording, setCanStartRecording] = useState(true);
+  const [lastQuestion, setLastQuestion] = useState("");
+  const retryTimeoutRef = useRef(null);
 
   const forceLoadVoices = () => {
     return new Promise((resolve) => {
@@ -650,17 +657,27 @@ export default function ChatBot({ isOpen, onClose }) {
         utterance.pitch = 1;
         utterance.volume = 1;
 
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => setIsSpeaking(false);
+        utterance.onstart = () => {
+          setIsSpeaking(true);
+          setCanStartRecording(false); // Disable recording while speaking
+        };
+        
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          setCanStartRecording(true); // Re-enable recording after speaking
+        };
+        
         utterance.onerror = (event) => {
           console.error('Speech synthesis error:', event);
           setIsSpeaking(false);
+          setCanStartRecording(true); // Re-enable recording on error
         };
 
         speechSynthesis.speak(utterance);
       } catch (error) {
         console.error('Error in speak function:', error);
         setIsSpeaking(false);
+        setCanStartRecording(true);
       }
     }
   };
@@ -735,6 +752,10 @@ export default function ChatBot({ isOpen, onClose }) {
       switch (event.error) {
         case 'no-speech':
           setError("No speech was detected. Please try again and speak clearly.");
+          setCanStartRecording(true);
+          if (lastQuestion) {
+            handleRetry(lastQuestion);
+          }
           break;
         case 'audio-capture':
           setError("No microphone was found. Ensure it is plugged in and allowed.");
@@ -789,7 +810,7 @@ export default function ChatBot({ isOpen, onClose }) {
         recognition.stop();
       }
     };
-  }, [bookingStep, cancelStep, meetingStep, selectedLanguage]);
+  }, [bookingStep, cancelStep, meetingStep, selectedLanguage, lastQuestion]);
 
   const handleUserInput = async (input) => {
     if (!input.trim()) return;
@@ -938,6 +959,21 @@ export default function ChatBot({ isOpen, onClose }) {
     }
   };
 
+  const handleRetry = async (question) => {
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+    }
+    
+    retryTimeoutRef.current = setTimeout(async () => {
+      await speak(question);
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: question 
+      }]);
+      setCanStartRecording(true);
+    }, 4000);
+  };
+
   const handleBookingFlow = async (input) => {
     const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
     
@@ -1080,49 +1116,51 @@ export default function ChatBot({ isOpen, onClose }) {
 
         case 5:
           const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-          const match = input.match(dateRegex);
-          
-          if (!match) {
-            const errorMsg = messages.invalidDateFormat;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Repeat the date prompt
-            await speak(messages.provideDate);
-            // Stay on the same step
+          if (!dateRegex.test(input)) {
+            await speak(messages.invalidDateFormat);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.invalidDateFormat 
+            }]);
+            setCanStartRecording(true);
+            handleRetry(messages.provideDate);
+            setLastQuestion(messages.provideDate);
             break;
           }
 
-          const [, day, month, year] = match;
+          const [day, month, year] = input.split('/');
           const selectedDate = new Date(year, month - 1, day);
           const today = new Date();
           today.setHours(0, 0, 0, 0);
 
           if (selectedDate < today) {
-            const errorMsg = messages.futureDateRequired;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Repeat the date prompt
-            await speak(messages.provideDate);
-            // Stay on the same step
+            await speak(messages.futureDateRequired);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.futureDateRequired 
+            }]);
+            setCanStartRecording(true); // Enable recording after error message
             break;
           }
 
-          if (selectedDate.getDay() === 0) {
-            const errorMsg = messages.closedSunday;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Repeat the date prompt
-            await speak(messages.provideDate);
-            // Stay on the same step
+          if (selectedDate.getDay() === 0) { // Sunday
+            await speak(messages.closedSunday);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.closedSunday 
+            }]);
+            setCanStartRecording(true); // Enable recording after error message
             break;
           }
 
-          setBookingData(prev => ({ ...prev, date: selectedDate.toLocaleDateString('en-CA') }));
-          
-          const clinicPrompt = messages.chooseClinic;
-          await speak(clinicPrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: clinicPrompt }]);
+          setBookingData(prev => ({ ...prev, date: input }));
           setBookingStep(6);
+          await speak(messages.chooseClinic);
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: messages.chooseClinic 
+          }]);
+          setCanStartRecording(true); // Enable recording after successful date input
           break;
 
         case 6:
@@ -1130,10 +1168,13 @@ export default function ChatBot({ isOpen, onClose }) {
           const clinicChoice = clinicNumberInput.trim();
           
           if (!['1', '2', '3'].includes(clinicChoice)) {
-            const errorMsg = messages.invalidClinic;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            await speak(messages.chooseClinic);
+            await speak(messages.invalidClinic);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.invalidClinic 
+            }]);
+            setCanStartRecording(true);
+            handleRetry(messages.chooseClinic);
             break;
           }
 
@@ -1182,14 +1223,10 @@ export default function ChatBot({ isOpen, onClose }) {
           const selectedTime = convertedTime.trim().toUpperCase();
           
           if (!availableTimeSlots.includes(selectedTime)) {
-            const errorMsg = messages.invalidTimeSlot;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Show available slots again
-            const slotsPrompt = messages.availableSlots.replace('{slots}', availableTimeSlots.join('\n'));
-            await speak(slotsPrompt);
-            setChatHistory(prev => [...prev, { role: "assistant", content: slotsPrompt }]);
-            // Stay on the same step
+            await speak(messages.invalidTimeSlot);
+            setChatHistory(prev => [...prev, { role: "assistant", content: messages.invalidTimeSlot }]);
+            setCanStartRecording(true);
+            handleRetry(messages.availableSlots.replace('{slots}', availableTimeSlots.join(', ')));
             break;
           }
 
@@ -1358,7 +1395,7 @@ export default function ChatBot({ isOpen, onClose }) {
       en: ['cancel', 'delete', 'remove'],
       hi: ['रद्द', 'कैंसिल', 'मिटा'],
       mr: ['रद्द', 'कॅन्सल', 'काढून'],
-      gu: ['રદ', 'કેન્સલ', 'કાઢી']
+      gu: ['रद', 'कેન્સલ', 'કાઢી']
     };
 
     const keywords = cancelKeywords[selectedLanguage] || cancelKeywords.en;
@@ -1432,382 +1469,6 @@ export default function ChatBot({ isOpen, onClose }) {
     }
   };
 
-  const handleMeetingFlow = async (input) => {
-    try {
-      switch(meetingStep) {
-        case 1: // Doctor ID selection
-          const doctorId = parseInt(convertNumberWordsToDigits(input, selectedLanguage));
-          const selectedDoctor = availableDoctors.find(doc => doc.id === doctorId);
-          
-          if (!selectedDoctor) {
-            const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
-            await speak(messages.invalidDoctorId);
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: messages.invalidDoctorId 
-            }]);
-            
-            // Show doctor list again
-            const doctorList = availableDoctors
-              .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name} (${doc.attributes.Profession})`)
-              .join('\n');
-            const doctorPrompt = messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
-            await speak(doctorPrompt);
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: doctorPrompt 
-            }]);
-            break;
-          }
-
-          setMeetingData(prev => ({ ...prev, doctorId }));
-          setMeetingStep(2);
-          await speak(`You've selected Dr. ${selectedDoctor.attributes.Name}. Please provide a name for your meeting (e.g., 'Follow-up Consultation')`);
-          setChatHistory(prev => [...prev, { 
-            role: "assistant", 
-            content: `You've selected Dr. ${selectedDoctor.attributes.Name}. Please provide a name for your meeting (e.g., 'Follow-up Consultation')` 
-          }]);
-          break;
-
-        case 2: // Meeting name
-          if (!input.trim()) {
-            await speak("Please provide a valid meeting name.");
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: "Please provide a valid meeting name." 
-            }]);
-            break;
-          }
-
-          setMeetingData(prev => ({ ...prev, eventName: input }));
-          setMeetingStep(3);
-          await speak("Please provide the meeting date in DD/MM/YYYY format.");
-          setChatHistory(prev => [...prev, { 
-            role: "assistant", 
-            content: "Please provide the meeting date in DD/MM/YYYY format." 
-          }]);
-          break;
-
-        case 3: // Date selection
-          const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-          const match = input.match(dateRegex);
-          
-          if (!match) {
-            await speak("Please provide the date in DD/MM/YYYY format.");
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: "Please provide the date in DD/MM/YYYY format." 
-            }]);
-            break;
-          }
-
-          const [, day, month, year] = match;
-          const selectedDate = new Date(year, month - 1, day);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-
-          if (selectedDate < today) {
-            await speak("Please select a future date.");
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: "Please select a future date." 
-            }]);
-            break;
-          }
-
-          if (selectedDate.getDay() === 0) {
-            await speak("Sorry, we are closed on Sundays. Please select another date.");
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: "Sorry, we are closed on Sundays. Please select another date." 
-            }]);
-            break;
-          }
-
-          try {
-            // Format date for Firebase
-            const formattedDate = selectedDate.toISOString().split('T')[0];
-            
-            // Fetch booked meetings from Firebase
-            const db = getFirestore(app);
-            const meetingsRef = collection(db, "MeetingEvent");
-            const q = query(meetingsRef, 
-              where("doctorId", "==", meetingData.doctorId),
-              where("selectedDate", "==", formattedDate)
-            );
-            
-            const querySnapshot = await getDocs(q);
-            const bookedSlots = [];
-            
-            querySnapshot.forEach((doc) => {
-              const data = doc.data();
-              bookedSlots.push(data.selectedTime);
-            });
-            
-            console.log('Current doctorId:', meetingData.doctorId);
-            console.log('Booked slots:', bookedSlots);
-            
-            // Get available time slots
-            const availableSlots = createTimeSlots(selectedDate, meetingData.doctorId, 30, bookedSlots);
-            console.log('Available slots:', availableSlots);
-
-            if (availableSlots.length === 0) {
-              await speak("No time slots available for this date. Please select another date.");
-              setChatHistory(prev => [...prev, { 
-                role: "assistant", 
-                content: "No time slots available for this date. Please select another date." 
-              }]);
-              break;
-            }
-
-            // Update meeting data and state
-            setMeetingData(prev => ({ ...prev, selectedDate: formattedDate }));
-            setAvailableTimeSlots(availableSlots);
-            
-            await speak(`Available evening time slots are: ${availableSlots.join(', ')}. Please choose a time slot.`);
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: `Available evening time slots are: ${availableSlots.join(', ')}. Please choose a time slot.` 
-            }]);
-            setMeetingStep(4);
-          } catch (error) {
-            console.error('Error processing date selection:', error);
-            await speak("There was an error processing the date. Please try again.");
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: "There was an error processing the date. Please try again." 
-            }]);
-          }
-          break;
-
-        case 4: // Time selection
-          const convertedTime = convertTimeExpression(input, selectedLanguage);
-          const selectedTime = convertedTime.trim().toUpperCase();
-          
-          if (!availableTimeSlots.includes(selectedTime)) {
-            await speak("Please select a valid time slot from the list provided.");
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: "Please select a valid time slot from the list provided." 
-            }]);
-            // Show available slots again
-            await speak(`Available time slots are: ${availableTimeSlots.join(', ')}`);
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: `Available time slots are: ${availableTimeSlots.join(', ')}` 
-            }]);
-            break;
-          }
-
-          setMeetingData(prev => ({ ...prev, selectedTime }));
-          setMeetingStep(5);
-          await speak("Would you prefer a Zoom meeting or Google Meet? Please type 'zoom' or 'meet'.");
-          setChatHistory(prev => [...prev, { 
-            role: "assistant", 
-            content: "Would you prefer a Zoom meeting or Google Meet? Please type 'zoom' or 'meet'." 
-          }]);
-          break;
-
-        case 5: // Meeting platform selection
-          const platform = input.toLowerCase();
-          if (platform !== 'zoom' && platform !== 'meet') {
-            await speak("Please type either 'zoom' or 'meet' to select the meeting platform.");
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: "Please type either 'zoom' or 'meet' to select the meeting platform." 
-            }]);
-            break;
-          }
-
-          let locationUrl = '';
-          if (platform === 'zoom') {
-            try {
-              // Convert time to proper format for Zoom API
-              const [time, period] = meetingData.selectedTime.split(' ');
-              const [hours, minutes] = time.split(':').map(Number);
-              let militaryHours = hours;
-              if (period === 'PM' && hours !== 12) militaryHours += 12;
-              if (period === 'AM' && hours === 12) militaryHours = 0;
-              
-              const startTime = `${meetingData.selectedDate}T${String(militaryHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
-
-              const zoomMeetingData = {
-                topic: meetingData.eventName || "Medical Consultation",
-                type: 2, // Scheduled meeting
-                start_time: startTime,
-                duration: 30,
-                timezone: "Asia/Kolkata",
-                settings: {
-                  host_video: true,
-                  participant_video: true,
-                  join_before_host: true,
-                  mute_upon_entry: false,
-                  auto_recording: "none",
-                  waiting_room: false
-                }
-              };
-
-              console.log('Sending Zoom meeting request:', zoomMeetingData); // Debug log
-
-              const response = await fetch('/api/zoom/create-meeting', {
-                method: 'POST',
-                headers: { 
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(zoomMeetingData)
-              });
-
-              if (!response.ok) {
-                const errorData = await response.json();
-                console.error('Zoom API error:', errorData);
-                throw new Error(errorData.error || 'Failed to create Zoom meeting');
-              }
-
-              const data = await response.json();
-              console.log('Zoom API response:', data);
-
-              if (!data.join_url) {
-                throw new Error('No meeting URL in Zoom response');
-              }
-
-              locationUrl = data.join_url;
-
-              // Add meeting URL to chat history
-              await speak("Your Zoom meeting has been scheduled. Here's the meeting URL:");
-              setChatHistory(prev => [...prev, { 
-                role: "assistant", 
-                content: `Your Zoom meeting has been scheduled!\nMeeting URL: ${locationUrl}` 
-              }]);
-
-              // Continue with Firebase creation...
-
-              // Create the meeting in Firebase
-              const id = Date.now().toString();
-              const db = getFirestore(app);
-              
-              const meetingDoc = {
-                id,
-                eventName: meetingData.eventName,
-                duration: 30,
-                locationType: "Zoom",
-                locationUrl: locationUrl,
-                selectedDate: meetingData.selectedDate,
-                selectedTime: meetingData.selectedTime,
-                themeColor: meetingData.themeColor,
-                businessId: currentUser?.email ? `/Business/${currentUser.email}` : "/Business/default@example.com",
-                createdBy: currentUser?.email || "default@example.com",
-                createdAt: new Date().toISOString(),
-                doctorId: meetingData.doctorId,
-                clinicType: "Evening Clinic",
-                clinicTiming: "8:00 PM - 10:00 PM"
-              };
-
-              try {
-                console.log('Saving meeting to Firebase:', meetingDoc);
-                await setDoc(doc(db, "MeetingEvent", id), meetingDoc);
-
-                const successMessage = `Your Zoom meeting has been scheduled successfully!\nMeeting URL: ${locationUrl}`;
-                await speak("Your Zoom meeting has been scheduled successfully! The meeting URL has been saved.");
-                setChatHistory(prev => [...prev, { 
-                  role: "assistant", 
-                  content: successMessage 
-                }]);
-
-                // Reset meeting flow
-                setMeetingStep(0);
-                setMeetingData({
-                  eventName: "",
-                  duration: 30,
-                  locationType: "",
-                  locationUrl: "",
-                  themeColor: "#4F46E5",
-                  doctorId: "",
-                  selectedDate: "",
-                  selectedTime: "",
-                  clinicType: "Evening Clinic"
-                });
-              } catch (error) {
-                console.error('Error saving meeting to Firebase:', error);
-                throw new Error('Failed to save meeting details');
-              }
-            } catch (error) {
-              console.error('Error in Zoom meeting creation:', error);
-              const errorMessage = `Failed to create Zoom meeting: ${error.message}`;
-              await speak(errorMessage);
-              setChatHistory(prev => [...prev, { 
-                role: "assistant", 
-                content: errorMessage 
-              }]);
-              setMeetingStep(0);
-            }
-          } else {
-            // For Google Meet, generate a unique meeting ID
-            const meetId = Math.random().toString(36).substring(7);
-            locationUrl = `https://meet.google.com/${meetId}`;
-          }
-
-          // Create the meeting in Firebase
-          try {
-            const id = Date.now().toString();
-            const db = getFirestore(app);
-              
-            await setDoc(doc(db, "MeetingEvent", id), {
-              id: id,
-              eventName: meetingData.eventName,
-              duration: 30,
-              locationType: platform === 'zoom' ? 'Zoom' : 'Google Meet',
-              locationUrl: locationUrl,
-              selectedDate: meetingData.selectedDate,
-              selectedTime: meetingData.selectedTime,
-              themeColor: meetingData.themeColor,
-              businessId: doc(db, "Business", currentUser?.email),
-              createdBy: currentUser?.email,
-              createdAt: new Date().toISOString(),
-              doctorId: meetingData.doctorId,
-              clinicType: 'Evening Clinic'
-            });
-
-            await speak("Your meeting has been scheduled successfully! You'll receive the meeting details via email.");
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: "Your meeting has been scheduled successfully! You'll receive the meeting details via email." 
-            }]);
-
-            // Reset meeting flow
-            setMeetingStep(0);
-            setMeetingData({
-              eventName: "",
-              duration: 30,
-              locationType: "",
-              locationUrl: "",
-              themeColor: "#4F46E5",
-              doctorId: "",
-              selectedDate: "",
-              selectedTime: "",
-              clinicType: "Evening Clinic"
-            });
-          } catch (error) {
-            console.error('Error creating meeting:', error);
-            await speak("Failed to schedule the meeting. Please try again.");
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: "Failed to schedule the meeting. Please try again." 
-            }]);
-            setMeetingStep(0);
-          }
-          break;
-      }
-    } catch (error) {
-      console.error('Error in handleMeetingFlow:', error);
-      await speak("Sorry, there was an error processing your request. Please try again.");
-      setChatHistory(prev => [...prev, { 
-        role: "assistant", 
-        content: "Sorry, there was an error processing your request. Please try again." 
-      }]);
-      setMeetingStep(0);
-    }
-  };
-
   return (
     <AnimatePresence>
       {isOpen && (
@@ -1855,11 +1516,15 @@ export default function ChatBot({ isOpen, onClose }) {
             <div className="flex gap-2">
               <Textarea
                 value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
+                onChange={(e) => {
+                  setUserInput(e.target.value);
+                  setIsTyping(e.target.value.length > 0);
+                }}
+                onBlur={() => setIsTyping(false)}
                 placeholder="Type your message..."
                 className="flex-1"
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     handleUserInput(userInput);
                   }
@@ -1869,7 +1534,12 @@ export default function ChatBot({ isOpen, onClose }) {
                 <Button onClick={() => handleUserInput(userInput)}>
                   <Send className="w-4 h-4" />
                 </Button>
-                <Button variant="outline" onClick={toggleRecording}>
+                <Button 
+                  variant="outline" 
+                  onClick={toggleRecording}
+                  disabled={!canStartRecording}
+                  title={!canStartRecording ? "Please wait for the response to finish" : ""}
+                >
                   {isRecording ? 
                     <StopCircle className="w-4 h-4 text-red-500" /> : 
                     <Mic className="w-4 h-4" />
