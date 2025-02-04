@@ -103,17 +103,35 @@ function MeetingForm({ setFormValue }) {
     localStorage.setItem("locationType", type);
 
     try {
+      // Get the selected date and time from localStorage
+      const selectedDate = localStorage.getItem("selectedDate");
+      const selectedTime = localStorage.getItem("selectedTime");
+      
+      // Convert time to 24-hour format for the API
+      let startTime = selectedDate;
+      if (selectedTime) {
+        const [time, period] = selectedTime.split(' ');
+        const [hours, minutes] = time.split(':').map(Number);
+        let militaryHours = hours;
+        if (period === 'PM' && hours !== 12) militaryHours += 12;
+        if (period === 'AM' && hours === 12) militaryHours = 0;
+        startTime = `${selectedDate}T${String(militaryHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+      }
+
       const response = await axios.post("/api/zoom/create-meeting", {
-        meetingData: {
-          topic: eventName || "New Meeting",
-          duration: duration,
-          type: 2,
-          settings: {
-            host_video: true,
-            participant_video: true,
-            join_before_host: true,
-          },
-        },
+        topic: eventName || "New Meeting",
+        type: 2, // Scheduled meeting
+        start_time: startTime || new Date().toISOString(),
+        duration: duration,
+        timezone: "Asia/Kolkata",
+        settings: {
+          host_video: true,
+          participant_video: true,
+          join_before_host: true,
+          mute_upon_entry: false,
+          auto_recording: "none",
+          waiting_room: false
+        }
       });
 
       if (response.data.join_url) {

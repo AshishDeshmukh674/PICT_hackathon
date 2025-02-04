@@ -29,7 +29,8 @@ async function getServerToServerToken() {
 
 export async function POST(request) {
   try {
-    const { meetingData } = await request.json();
+    const meetingData = await request.json();
+    console.log('Received meeting data:', meetingData); // Debug log
     
     // Get server-to-server token
     const accessToken = await getServerToServerToken();
@@ -41,9 +42,29 @@ export async function POST(request) {
       );
     }
 
+    // Ensure required fields are present
+    const zoomMeetingPayload = {
+      topic: meetingData.topic || "New Meeting",
+      type: 2, // Scheduled meeting
+      start_time: meetingData.start_time || new Date().toISOString(),
+      duration: meetingData.duration || 30,
+      timezone: meetingData.timezone || "Asia/Kolkata",
+      settings: {
+        host_video: true,
+        participant_video: true,
+        join_before_host: true,
+        mute_upon_entry: false,
+        auto_recording: "none",
+        waiting_room: false,
+        ...meetingData.settings
+      }
+    };
+
+    console.log('Sending to Zoom API:', zoomMeetingPayload); // Debug log
+
     const response = await axios.post(
       "https://api.zoom.us/v2/users/me/meetings",
-      meetingData,
+      zoomMeetingPayload,
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,

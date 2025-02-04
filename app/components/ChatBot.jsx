@@ -10,6 +10,9 @@ import GlobalApi from "../_utils/GlobalApi";
 import axios from 'axios';
 import { FileUploadHandler } from "./FileUploadHandler";
 import { doctorTypes, extractDoctorType } from './doctorTypes';
+import { getFirestore, doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { app, auth } from '../config/FirebaseConfig';
+import { onAuthStateChanged } from "firebase/auth";
 
 const LANGUAGE_OPTIONS = {
   en: "English",
@@ -131,7 +134,7 @@ const NUMBER_WORDS = {
   },
   gu: {
     'એક': '1', 'બે': '2', 'ત્રણ': '3', 'ચાર': '4', 'પાંચ': '5',
-    'છ': '6', 'સાત': '7', 'આઠ': '8', 'નવ': '9', 'દસ': '10'
+    'છ': '6', 'सात': '7', 'आठ': '8', 'નવ': '9', 'દસ': '10'
   },
   en: {
     'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5',
@@ -333,34 +336,58 @@ function TypingAnimation() {
 
 const getTimeSlotsForDoctor = (doctorId) => {
   const doctorTimeSlots = {
-    '3': {
-      'Morning Clinic': [[8, 30], [11, 30]],
-      'Evening Clinic': [[16, 0], [20, 0]],
-      'AfterNoon Clinic': [[13, 0], [16, 0]]
+    '3': { 
+      evening: [[20, 0], [22, 0]] // 8 PM to 10 PM
     },
-    '4': {
-      'Morning Clinic': [[8, 0], [12, 0]],
-      'Evening Clinic': [[16, 0], [20, 0]],
-      'AfterNoon Clinic': [[13, 0], [16, 0]]
+    '4': { 
+      evening: [[20, 0], [22, 0]]
     },
     '5': {
-      'Morning Clinic': [[8, 30], [12, 0]],
-      'Evening Clinic': [[16, 0], [21, 0]],
-      'AfterNoon Clinic': [[13, 0], [16, 0]]
+      evening: [[20, 0], [22, 0]]
     },
-    '7': {
-      'Morning Clinic': [[8, 0], [12, 0]],
-      'Evening Clinic': [[16, 0], [20, 0]],
-      'AfterNoon Clinic': [[13, 0], [16, 0]]
+    '7': { 
+      evening: [[20, 0], [22, 0]]
     }
   };
+  return doctorTimeSlots[doctorId] || { evening: [[20, 0], [22, 0]] }; // Default 8 PM to 10 PM
+};
 
-  // Default slots if doctor ID not found
-  return doctorTimeSlots[doctorId] || {
-    'Morning Clinic': [[9, 0], [12, 0]],
-    'Evening Clinic': [[16, 0], [20, 0]],
-    'AfterNoon Clinic': [[13, 0], [16, 0]]
-  };
+const createTimeSlots = (date, doctorId, interval = 30, bookedSlots = []) => {
+  const timeList = [];
+  const { evening } = getTimeSlotsForDoctor(doctorId);
+
+  const isToday = isSameDay(date, new Date());
+  const now = new Date();
+
+  let [currentHour, currentMinutes] = evening[0];
+  const [endHour, endMinutes] = evening[1];
+
+  while (currentHour < endHour || (currentHour === endHour && currentMinutes < endMinutes)) {
+    const slotTime = new Date(date);
+    slotTime.setHours(currentHour, currentMinutes);
+
+    if (isToday && slotTime <= now) {
+      currentMinutes += interval;
+      if (currentMinutes >= 60) {
+        currentHour += Math.floor(currentMinutes / 60);
+        currentMinutes = currentMinutes % 60;
+      }
+      continue;
+    }
+
+    const formattedTime = formatTime(slotTime);
+    if (!bookedSlots.includes(formattedTime)) {
+      timeList.push(formattedTime);
+    }
+
+    currentMinutes += interval;
+    if (currentMinutes >= 60) {
+      currentHour += Math.floor(currentMinutes / 60);
+      currentMinutes = currentMinutes % 60;
+    }
+  }
+
+  return timeList;
 };
 
 const formatTime = (date) => {
@@ -531,6 +558,29 @@ export default function ChatBot({ isOpen, onClose }) {
     email: "",
     date: ""
   });
+  const [meetingStep, setMeetingStep] = useState(0);
+  const [meetingData, setMeetingData] = useState({
+    eventName: "",
+    duration: 30,
+    locationType: "",
+    locationUrl: "",
+    themeColor: "#4F46E5", // Default indigo color
+    doctorId: "",
+    selectedDate: "",
+    selectedTime: "",
+    clinicType: "Evening Clinic"
+  });
+
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Add useEffect to handle auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const forceLoadVoices = () => {
     return new Promise((resolve) => {
@@ -668,6 +718,8 @@ export default function ChatBot({ isOpen, onClose }) {
           await handleBookingFlow(cleanedInput);
         } else if (cancelStep > 0) {
           await handleCancellationFlow(cleanedInput);
+        } else if (meetingStep > 0) {
+          await handleMeetingFlow(cleanedInput);
         } else {
           await handleUserInput(cleanedInput);
         }
@@ -706,7 +758,7 @@ export default function ChatBot({ isOpen, onClose }) {
     recognition.onend = () => {
       setIsRecording(false);
       // Only restart if we're in booking/cancel flow and not processing
-      if ((bookingStep > 0 || cancelStep > 0) && !error) {
+      if ((bookingStep > 0 || cancelStep > 0 || meetingStep > 0) && !error) {
         setTimeout(() => {
           try {
             if (!recognition.started) {
@@ -737,7 +789,7 @@ export default function ChatBot({ isOpen, onClose }) {
         recognition.stop();
       }
     };
-  }, [bookingStep, cancelStep, selectedLanguage]);
+  }, [bookingStep, cancelStep, meetingStep, selectedLanguage]);
 
   const handleUserInput = async (input) => {
     if (!input.trim()) return;
@@ -758,6 +810,8 @@ export default function ChatBot({ isOpen, onClose }) {
         }]);
       } else if (bookingStep > 0) {
         await handleBookingFlow(input);
+      } else if (meetingStep > 0) {
+        await handleMeetingFlow(input);
       } else {
         // Check for symptoms
         const symptoms = extractSymptoms(input, selectedLanguage);
@@ -779,6 +833,61 @@ export default function ChatBot({ isOpen, onClose }) {
             role: "assistant", 
             content: messages.provideName 
           }]);
+        } else if (input.toLowerCase().includes("schedule") || 
+                   input.toLowerCase().includes("meeting") || 
+                   input.toLowerCase().includes("zoom") || 
+                   input.toLowerCase().includes("online")) {
+          try {
+            // Fetch doctor list with retry mechanism
+            let retryCount = 0;
+            let doctorsResponse = null;
+            
+            while (retryCount < 3) {
+              try {
+                doctorsResponse = await GlobalApi.getDoctorList();
+                if (isValidDoctorResponse(doctorsResponse)) {
+                  break;
+                }
+                retryCount++;
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+              } catch (err) {
+                console.error(`Attempt ${retryCount + 1} failed:`, err);
+                retryCount++;
+                if (retryCount === 3) throw err;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+            }
+
+            if (!isValidDoctorResponse(doctorsResponse)) {
+              throw new Error('Invalid doctor list response');
+            }
+
+            const doctors = doctorsResponse.data.data;
+            setAvailableDoctors(doctors);
+
+            // Create doctor list string
+            const doctorList = doctors
+              .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name} (${doc.attributes.Profession})`)
+              .join('\n');
+
+            const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
+            const doctorPrompt = messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
+            
+            setMeetingStep(1);
+            await speak(doctorPrompt);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: doctorPrompt 
+            }]);
+          } catch (error) {
+            console.error('Doctor list fetch error:', error);
+            const errorMsg = "There was a problem fetching the doctor list. Please try again in a moment.";
+            await speak(errorMsg);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: errorMsg 
+            }]);
+          }
         } else {
           // Normal chat flow
           const response = await fetch("/api/chat", {
@@ -1320,6 +1429,382 @@ export default function ChatBot({ isOpen, onClose }) {
       }]);
       setCancelStep(0);
       setCancelData({ email: "", date: "" });
+    }
+  };
+
+  const handleMeetingFlow = async (input) => {
+    try {
+      switch(meetingStep) {
+        case 1: // Doctor ID selection
+          const doctorId = parseInt(convertNumberWordsToDigits(input, selectedLanguage));
+          const selectedDoctor = availableDoctors.find(doc => doc.id === doctorId);
+          
+          if (!selectedDoctor) {
+            const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
+            await speak(messages.invalidDoctorId);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.invalidDoctorId 
+            }]);
+            
+            // Show doctor list again
+            const doctorList = availableDoctors
+              .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name} (${doc.attributes.Profession})`)
+              .join('\n');
+            const doctorPrompt = messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
+            await speak(doctorPrompt);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: doctorPrompt 
+            }]);
+            break;
+          }
+
+          setMeetingData(prev => ({ ...prev, doctorId }));
+          setMeetingStep(2);
+          await speak(`You've selected Dr. ${selectedDoctor.attributes.Name}. Please provide a name for your meeting (e.g., 'Follow-up Consultation')`);
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: `You've selected Dr. ${selectedDoctor.attributes.Name}. Please provide a name for your meeting (e.g., 'Follow-up Consultation')` 
+          }]);
+          break;
+
+        case 2: // Meeting name
+          if (!input.trim()) {
+            await speak("Please provide a valid meeting name.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "Please provide a valid meeting name." 
+            }]);
+            break;
+          }
+
+          setMeetingData(prev => ({ ...prev, eventName: input }));
+          setMeetingStep(3);
+          await speak("Please provide the meeting date in DD/MM/YYYY format.");
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: "Please provide the meeting date in DD/MM/YYYY format." 
+          }]);
+          break;
+
+        case 3: // Date selection
+          const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+          const match = input.match(dateRegex);
+          
+          if (!match) {
+            await speak("Please provide the date in DD/MM/YYYY format.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "Please provide the date in DD/MM/YYYY format." 
+            }]);
+            break;
+          }
+
+          const [, day, month, year] = match;
+          const selectedDate = new Date(year, month - 1, day);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          if (selectedDate < today) {
+            await speak("Please select a future date.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "Please select a future date." 
+            }]);
+            break;
+          }
+
+          if (selectedDate.getDay() === 0) {
+            await speak("Sorry, we are closed on Sundays. Please select another date.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "Sorry, we are closed on Sundays. Please select another date." 
+            }]);
+            break;
+          }
+
+          try {
+            // Format date for Firebase
+            const formattedDate = selectedDate.toISOString().split('T')[0];
+            
+            // Fetch booked meetings from Firebase
+            const db = getFirestore(app);
+            const meetingsRef = collection(db, "MeetingEvent");
+            const q = query(meetingsRef, 
+              where("doctorId", "==", meetingData.doctorId),
+              where("selectedDate", "==", formattedDate)
+            );
+            
+            const querySnapshot = await getDocs(q);
+            const bookedSlots = [];
+            
+            querySnapshot.forEach((doc) => {
+              const data = doc.data();
+              bookedSlots.push(data.selectedTime);
+            });
+            
+            console.log('Current doctorId:', meetingData.doctorId);
+            console.log('Booked slots:', bookedSlots);
+            
+            // Get available time slots
+            const availableSlots = createTimeSlots(selectedDate, meetingData.doctorId, 30, bookedSlots);
+            console.log('Available slots:', availableSlots);
+
+            if (availableSlots.length === 0) {
+              await speak("No time slots available for this date. Please select another date.");
+              setChatHistory(prev => [...prev, { 
+                role: "assistant", 
+                content: "No time slots available for this date. Please select another date." 
+              }]);
+              break;
+            }
+
+            // Update meeting data and state
+            setMeetingData(prev => ({ ...prev, selectedDate: formattedDate }));
+            setAvailableTimeSlots(availableSlots);
+            
+            await speak(`Available evening time slots are: ${availableSlots.join(', ')}. Please choose a time slot.`);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: `Available evening time slots are: ${availableSlots.join(', ')}. Please choose a time slot.` 
+            }]);
+            setMeetingStep(4);
+          } catch (error) {
+            console.error('Error processing date selection:', error);
+            await speak("There was an error processing the date. Please try again.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "There was an error processing the date. Please try again." 
+            }]);
+          }
+          break;
+
+        case 4: // Time selection
+          const convertedTime = convertTimeExpression(input, selectedLanguage);
+          const selectedTime = convertedTime.trim().toUpperCase();
+          
+          if (!availableTimeSlots.includes(selectedTime)) {
+            await speak("Please select a valid time slot from the list provided.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "Please select a valid time slot from the list provided." 
+            }]);
+            // Show available slots again
+            await speak(`Available time slots are: ${availableTimeSlots.join(', ')}`);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: `Available time slots are: ${availableTimeSlots.join(', ')}` 
+            }]);
+            break;
+          }
+
+          setMeetingData(prev => ({ ...prev, selectedTime }));
+          setMeetingStep(5);
+          await speak("Would you prefer a Zoom meeting or Google Meet? Please type 'zoom' or 'meet'.");
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: "Would you prefer a Zoom meeting or Google Meet? Please type 'zoom' or 'meet'." 
+          }]);
+          break;
+
+        case 5: // Meeting platform selection
+          const platform = input.toLowerCase();
+          if (platform !== 'zoom' && platform !== 'meet') {
+            await speak("Please type either 'zoom' or 'meet' to select the meeting platform.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "Please type either 'zoom' or 'meet' to select the meeting platform." 
+            }]);
+            break;
+          }
+
+          let locationUrl = '';
+          if (platform === 'zoom') {
+            try {
+              // Convert time to proper format for Zoom API
+              const [time, period] = meetingData.selectedTime.split(' ');
+              const [hours, minutes] = time.split(':').map(Number);
+              let militaryHours = hours;
+              if (period === 'PM' && hours !== 12) militaryHours += 12;
+              if (period === 'AM' && hours === 12) militaryHours = 0;
+              
+              const startTime = `${meetingData.selectedDate}T${String(militaryHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+
+              const zoomMeetingData = {
+                topic: meetingData.eventName || "Medical Consultation",
+                type: 2, // Scheduled meeting
+                start_time: startTime,
+                duration: 30,
+                timezone: "Asia/Kolkata",
+                settings: {
+                  host_video: true,
+                  participant_video: true,
+                  join_before_host: true,
+                  mute_upon_entry: false,
+                  auto_recording: "none",
+                  waiting_room: false
+                }
+              };
+
+              console.log('Sending Zoom meeting request:', zoomMeetingData); // Debug log
+
+              const response = await fetch('/api/zoom/create-meeting', {
+                method: 'POST',
+                headers: { 
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(zoomMeetingData)
+              });
+
+              if (!response.ok) {
+                const errorData = await response.json();
+                console.error('Zoom API error:', errorData);
+                throw new Error(errorData.error || 'Failed to create Zoom meeting');
+              }
+
+              const data = await response.json();
+              console.log('Zoom API response:', data);
+
+              if (!data.join_url) {
+                throw new Error('No meeting URL in Zoom response');
+              }
+
+              locationUrl = data.join_url;
+
+              // Add meeting URL to chat history
+              await speak("Your Zoom meeting has been scheduled. Here's the meeting URL:");
+              setChatHistory(prev => [...prev, { 
+                role: "assistant", 
+                content: `Your Zoom meeting has been scheduled!\nMeeting URL: ${locationUrl}` 
+              }]);
+
+              // Continue with Firebase creation...
+
+              // Create the meeting in Firebase
+              const id = Date.now().toString();
+              const db = getFirestore(app);
+              
+              const meetingDoc = {
+                id,
+                eventName: meetingData.eventName,
+                duration: 30,
+                locationType: "Zoom",
+                locationUrl: locationUrl,
+                selectedDate: meetingData.selectedDate,
+                selectedTime: meetingData.selectedTime,
+                themeColor: meetingData.themeColor,
+                businessId: currentUser?.email ? `/Business/${currentUser.email}` : "/Business/default@example.com",
+                createdBy: currentUser?.email || "default@example.com",
+                createdAt: new Date().toISOString(),
+                doctorId: meetingData.doctorId,
+                clinicType: "Evening Clinic",
+                clinicTiming: "8:00 PM - 10:00 PM"
+              };
+
+              try {
+                console.log('Saving meeting to Firebase:', meetingDoc);
+                await setDoc(doc(db, "MeetingEvent", id), meetingDoc);
+
+                const successMessage = `Your Zoom meeting has been scheduled successfully!\nMeeting URL: ${locationUrl}`;
+                await speak("Your Zoom meeting has been scheduled successfully! The meeting URL has been saved.");
+                setChatHistory(prev => [...prev, { 
+                  role: "assistant", 
+                  content: successMessage 
+                }]);
+
+                // Reset meeting flow
+                setMeetingStep(0);
+                setMeetingData({
+                  eventName: "",
+                  duration: 30,
+                  locationType: "",
+                  locationUrl: "",
+                  themeColor: "#4F46E5",
+                  doctorId: "",
+                  selectedDate: "",
+                  selectedTime: "",
+                  clinicType: "Evening Clinic"
+                });
+              } catch (error) {
+                console.error('Error saving meeting to Firebase:', error);
+                throw new Error('Failed to save meeting details');
+              }
+            } catch (error) {
+              console.error('Error in Zoom meeting creation:', error);
+              const errorMessage = `Failed to create Zoom meeting: ${error.message}`;
+              await speak(errorMessage);
+              setChatHistory(prev => [...prev, { 
+                role: "assistant", 
+                content: errorMessage 
+              }]);
+              setMeetingStep(0);
+            }
+          } else {
+            // For Google Meet, generate a unique meeting ID
+            const meetId = Math.random().toString(36).substring(7);
+            locationUrl = `https://meet.google.com/${meetId}`;
+          }
+
+          // Create the meeting in Firebase
+          try {
+            const id = Date.now().toString();
+            const db = getFirestore(app);
+              
+            await setDoc(doc(db, "MeetingEvent", id), {
+              id: id,
+              eventName: meetingData.eventName,
+              duration: 30,
+              locationType: platform === 'zoom' ? 'Zoom' : 'Google Meet',
+              locationUrl: locationUrl,
+              selectedDate: meetingData.selectedDate,
+              selectedTime: meetingData.selectedTime,
+              themeColor: meetingData.themeColor,
+              businessId: doc(db, "Business", currentUser?.email),
+              createdBy: currentUser?.email,
+              createdAt: new Date().toISOString(),
+              doctorId: meetingData.doctorId,
+              clinicType: 'Evening Clinic'
+            });
+
+            await speak("Your meeting has been scheduled successfully! You'll receive the meeting details via email.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "Your meeting has been scheduled successfully! You'll receive the meeting details via email." 
+            }]);
+
+            // Reset meeting flow
+            setMeetingStep(0);
+            setMeetingData({
+              eventName: "",
+              duration: 30,
+              locationType: "",
+              locationUrl: "",
+              themeColor: "#4F46E5",
+              doctorId: "",
+              selectedDate: "",
+              selectedTime: "",
+              clinicType: "Evening Clinic"
+            });
+          } catch (error) {
+            console.error('Error creating meeting:', error);
+            await speak("Failed to schedule the meeting. Please try again.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "Failed to schedule the meeting. Please try again." 
+            }]);
+            setMeetingStep(0);
+          }
+          break;
+      }
+    } catch (error) {
+      console.error('Error in handleMeetingFlow:', error);
+      await speak("Sorry, there was an error processing your request. Please try again.");
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: "Sorry, there was an error processing your request. Please try again." 
+      }]);
+      setMeetingStep(0);
     }
   };
 
