@@ -1468,6 +1468,67 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
       setCancelData({ email: "", date: "" });
     }
   };
+  
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === ' ' && !isTyping) {
+        const currentTime = Date.now();
+        
+        // Reset count if too much time has passed since last spacebar
+        if (currentTime - lastSpaceTime > 500) {
+          setSpacebarCount(1);
+        } else {
+          setSpacebarCount(prev => prev + 1);
+        }
+        
+        setLastSpaceTime(currentTime);
+
+        // Clear existing timeout
+        if (spacebarTimeoutRef.current) {
+          clearTimeout(spacebarTimeoutRef.current);
+        }
+
+        // Set new timeout to reset count
+        spacebarTimeoutRef.current = setTimeout(() => {
+          setSpacebarCount(0);
+        }, 500);
+
+        // Handle different spacebar counts
+        if (!isOpen && spacebarCount === 2) {
+          onClose(false);
+        } else if (isOpen) {
+          if (spacebarCount === 1 && isSpeaking) {
+            // Stop speaking on single spacebar press
+            speechSynthesis.cancel();
+            setIsSpeaking(false);
+            setCanStartRecording(true);
+          } else if (spacebarCount === 1 && isRecording) {
+            // Stop recording on single spacebar press
+            toggleRecording();
+          } else if (spacebarCount === 2 && !isRecording && canStartRecording) {
+            // Start recording on double spacebar press if allowed
+            startVoiceRecognition();
+          }
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      if (spacebarTimeoutRef.current) {
+        clearTimeout(spacebarTimeoutRef.current);
+      }
+    };
+  }, [isOpen, spacebarCount, lastSpaceTime, isRecording, isTyping, isSpeaking, canStartRecording, onClose]);
+
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <AnimatePresence>
