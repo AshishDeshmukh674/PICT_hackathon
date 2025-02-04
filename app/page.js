@@ -11,7 +11,7 @@ import dynamic from 'next/dynamic';
 import Campaign from './_components/campaign'
 import Gallery from './_components/Gallery'
 import DoctorLogin from "./_components/doctorLogin"; // Correct path for DoctorLogin
-import Chatbot from "./chat/page"
+import ChatBot from "./components/ChatBot";
 import Link from 'next/link'
 import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
 
@@ -20,6 +20,7 @@ const MapComponent = dynamic(() => import('./_components/map'), { ssr: false });
 export default function Home() {
   const { user } = useKindeBrowserClient();
   const [doctorList,setDoctorList]=useState([]);
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false);
   
   useEffect(()=>{
     getDoctorList();
@@ -65,7 +66,10 @@ export default function Home() {
           <MapComponent />
         </div>
         <div className="fixed bottom-20 right-4 z-[1000]">
-          <Chatbot />
+          <ChatBot 
+            isOpen={isChatbotOpen} 
+            onClose={() => setIsChatbotOpen(!isChatbotOpen)}
+          />
         </div>
       </div>
     </>

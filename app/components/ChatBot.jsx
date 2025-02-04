@@ -502,7 +502,7 @@ const isValidDoctorResponse = (response) => {
          response.data.data.every(doc => doc.id && doc.attributes?.Name);
 };
 
-export default function ChatBot({ isOpen, onClose }) {
+export default function ChatBot({ isOpen, onClose, onOpen }) {
   const [userInput, setUserInput] = useState("");
   const [chatHistory, setChatHistory] = useState([
     { role: "assistant", content: TRANSLATIONS.en.welcome }
@@ -531,6 +531,13 @@ export default function ChatBot({ isOpen, onClose }) {
     email: "",
     date: ""
   });
+  const [spacebarCount, setSpacebarCount] = useState(0);
+  const [lastSpaceTime, setLastSpaceTime] = useState(0);
+  const [isTyping, setIsTyping] = useState(false);
+  const spacebarTimeoutRef = useRef(null);
+  const [canStartRecording, setCanStartRecording] = useState(true);
+  const [lastQuestion, setLastQuestion] = useState("");
+  const retryTimeoutRef = useRef(null);
 
   const forceLoadVoices = () => {
     return new Promise((resolve) => {
@@ -600,17 +607,27 @@ export default function ChatBot({ isOpen, onClose }) {
         utterance.pitch = 1;
         utterance.volume = 1;
 
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => setIsSpeaking(false);
+        utterance.onstart = () => {
+          setIsSpeaking(true);
+          setCanStartRecording(false); // Disable recording while speaking
+        };
+        
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          setCanStartRecording(true); // Re-enable recording after speaking
+        };
+        
         utterance.onerror = (event) => {
           console.error('Speech synthesis error:', event);
           setIsSpeaking(false);
+          setCanStartRecording(true); // Re-enable recording on error
         };
 
         speechSynthesis.speak(utterance);
       } catch (error) {
         console.error('Error in speak function:', error);
         setIsSpeaking(false);
+        setCanStartRecording(true);
       }
     }
   };
@@ -683,6 +700,10 @@ export default function ChatBot({ isOpen, onClose }) {
       switch (event.error) {
         case 'no-speech':
           setError("No speech was detected. Please try again and speak clearly.");
+          setCanStartRecording(true);
+          if (lastQuestion) {
+            handleRetry(lastQuestion);
+          }
           break;
         case 'audio-capture':
           setError("No microphone was found. Ensure it is plugged in and allowed.");
@@ -737,7 +758,7 @@ export default function ChatBot({ isOpen, onClose }) {
         recognition.stop();
       }
     };
-  }, [bookingStep, cancelStep, selectedLanguage]);
+  }, [bookingStep, cancelStep, selectedLanguage, lastQuestion]);
 
   const handleUserInput = async (input) => {
     if (!input.trim()) return;
@@ -827,6 +848,21 @@ export default function ChatBot({ isOpen, onClose }) {
       setIsLoading(false);
       setUserInput("");
     }
+  };
+
+  const handleRetry = async (question) => {
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+    }
+    
+    retryTimeoutRef.current = setTimeout(async () => {
+      await speak(question);
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: question 
+      }]);
+      setCanStartRecording(true);
+    }, 4000);
   };
 
   const handleBookingFlow = async (input) => {
@@ -971,49 +1007,51 @@ export default function ChatBot({ isOpen, onClose }) {
 
         case 5:
           const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-          const match = input.match(dateRegex);
-          
-          if (!match) {
-            const errorMsg = messages.invalidDateFormat;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Repeat the date prompt
-            await speak(messages.provideDate);
-            // Stay on the same step
+          if (!dateRegex.test(input)) {
+            await speak(messages.invalidDateFormat);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.invalidDateFormat 
+            }]);
+            setCanStartRecording(true);
+            handleRetry(messages.provideDate);
+            setLastQuestion(messages.provideDate);
             break;
           }
 
-          const [, day, month, year] = match;
+          const [day, month, year] = input.split('/');
           const selectedDate = new Date(year, month - 1, day);
           const today = new Date();
           today.setHours(0, 0, 0, 0);
 
           if (selectedDate < today) {
-            const errorMsg = messages.futureDateRequired;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Repeat the date prompt
-            await speak(messages.provideDate);
-            // Stay on the same step
+            await speak(messages.futureDateRequired);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.futureDateRequired 
+            }]);
+            setCanStartRecording(true); // Enable recording after error message
             break;
           }
 
-          if (selectedDate.getDay() === 0) {
-            const errorMsg = messages.closedSunday;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Repeat the date prompt
-            await speak(messages.provideDate);
-            // Stay on the same step
+          if (selectedDate.getDay() === 0) { // Sunday
+            await speak(messages.closedSunday);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.closedSunday 
+            }]);
+            setCanStartRecording(true); // Enable recording after error message
             break;
           }
 
-          setBookingData(prev => ({ ...prev, date: selectedDate.toLocaleDateString('en-CA') }));
-          
-          const clinicPrompt = messages.chooseClinic;
-          await speak(clinicPrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: clinicPrompt }]);
+          setBookingData(prev => ({ ...prev, date: input }));
           setBookingStep(6);
+          await speak(messages.chooseClinic);
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: messages.chooseClinic 
+          }]);
+          setCanStartRecording(true); // Enable recording after successful date input
           break;
 
         case 6:
@@ -1021,10 +1059,13 @@ export default function ChatBot({ isOpen, onClose }) {
           const clinicChoice = clinicNumberInput.trim();
           
           if (!['1', '2', '3'].includes(clinicChoice)) {
-            const errorMsg = messages.invalidClinic;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            await speak(messages.chooseClinic);
+            await speak(messages.invalidClinic);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.invalidClinic 
+            }]);
+            setCanStartRecording(true);
+            handleRetry(messages.chooseClinic);
             break;
           }
 
@@ -1073,14 +1114,10 @@ export default function ChatBot({ isOpen, onClose }) {
           const selectedTime = convertedTime.trim().toUpperCase();
           
           if (!availableTimeSlots.includes(selectedTime)) {
-            const errorMsg = messages.invalidTimeSlot;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Show available slots again
-            const slotsPrompt = messages.availableSlots.replace('{slots}', availableTimeSlots.join('\n'));
-            await speak(slotsPrompt);
-            setChatHistory(prev => [...prev, { role: "assistant", content: slotsPrompt }]);
-            // Stay on the same step
+            await speak(messages.invalidTimeSlot);
+            setChatHistory(prev => [...prev, { role: "assistant", content: messages.invalidTimeSlot }]);
+            setCanStartRecording(true);
+            handleRetry(messages.availableSlots.replace('{slots}', availableTimeSlots.join(', ')));
             break;
           }
 
@@ -1249,7 +1286,7 @@ export default function ChatBot({ isOpen, onClose }) {
       en: ['cancel', 'delete', 'remove'],
       hi: ['रद्द', 'कैंसिल', 'मिटा'],
       mr: ['रद्द', 'कॅन्सल', 'काढून'],
-      gu: ['રદ', 'કેન્સલ', 'કાઢી']
+      gu: ['रद', 'कેન્સલ', 'કાઢી']
     };
 
     const keywords = cancelKeywords[selectedLanguage] || cancelKeywords.en;
@@ -1323,6 +1360,67 @@ export default function ChatBot({ isOpen, onClose }) {
     }
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === ' ' && !isTyping) {
+        const currentTime = Date.now();
+        
+        // Reset count if too much time has passed since last spacebar
+        if (currentTime - lastSpaceTime > 500) {
+          setSpacebarCount(1);
+        } else {
+          setSpacebarCount(prev => prev + 1);
+        }
+        
+        setLastSpaceTime(currentTime);
+
+        // Clear existing timeout
+        if (spacebarTimeoutRef.current) {
+          clearTimeout(spacebarTimeoutRef.current);
+        }
+
+        // Set new timeout to reset count
+        spacebarTimeoutRef.current = setTimeout(() => {
+          setSpacebarCount(0);
+        }, 500);
+
+        // Handle different spacebar counts
+        if (!isOpen && spacebarCount === 2) {
+          onClose(false);
+        } else if (isOpen) {
+          if (spacebarCount === 1 && isSpeaking) {
+            // Stop speaking on single spacebar press
+            speechSynthesis.cancel();
+            setIsSpeaking(false);
+            setCanStartRecording(true);
+          } else if (spacebarCount === 1 && isRecording) {
+            // Stop recording on single spacebar press
+            toggleRecording();
+          } else if (spacebarCount === 2 && !isRecording && canStartRecording) {
+            // Start recording on double spacebar press if allowed
+            startVoiceRecognition();
+          }
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      if (spacebarTimeoutRef.current) {
+        clearTimeout(spacebarTimeoutRef.current);
+      }
+    };
+  }, [isOpen, spacebarCount, lastSpaceTime, isRecording, isTyping, isSpeaking, canStartRecording, onClose]);
+
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, []);
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -1370,11 +1468,15 @@ export default function ChatBot({ isOpen, onClose }) {
             <div className="flex gap-2">
               <Textarea
                 value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
+                onChange={(e) => {
+                  setUserInput(e.target.value);
+                  setIsTyping(e.target.value.length > 0);
+                }}
+                onBlur={() => setIsTyping(false)}
                 placeholder="Type your message..."
                 className="flex-1"
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     handleUserInput(userInput);
                   }
@@ -1384,7 +1486,12 @@ export default function ChatBot({ isOpen, onClose }) {
                 <Button onClick={() => handleUserInput(userInput)}>
                   <Send className="w-4 h-4" />
                 </Button>
-                <Button variant="outline" onClick={toggleRecording}>
+                <Button 
+                  variant="outline" 
+                  onClick={toggleRecording}
+                  disabled={!canStartRecording}
+                  title={!canStartRecording ? "Please wait for the response to finish" : ""}
+                >
                   {isRecording ? 
                     <StopCircle className="w-4 h-4 text-red-500" /> : 
                     <Mic className="w-4 h-4" />
