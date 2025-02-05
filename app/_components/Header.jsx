@@ -137,7 +137,7 @@ function Header() {
         <div className="flex items-center gap-20">
           <div className="flex flex-col items-center">
             <Image src="/logo.png" alt="logo" width={150} height={70} />
-            <span className="text-red-600 text-md font-semibold mt-2">Ratnamukund HealthCare Foundation</span>
+            {/* <span className="text-red-600 text-md font-semibold mt-2">Ratnamukund HealthCare Foundation</span> */}
           </div>
 
           <nav className="hidden md:flex space-x-6 gap-10">
@@ -180,6 +180,9 @@ function Header() {
                 <ul className="flex flex-col gap-2">
                   <li className="cursor-pointer hover:bg-gray-100 p-2 rounded-md text-gray-800 hover:text-primary transition duration-300 ease-in-out">
                     <Link href="/my-booking">My Booking</Link>
+                  </li>
+                  <li className="cursor-pointer hover:bg-gray-100 p-2 rounded-md text-gray-800 hover:text-primary transition duration-300 ease-in-out">
+                    <Link href="/diet-planner">Diet Planner</Link>
                   </li>
                   <li className="cursor-pointer hover:bg-gray-100 p-2 rounded-md text-gray-800 hover:text-primary transition duration-300 ease-in-out">
                     <LogoutLink>Log Out</LogoutLink>
