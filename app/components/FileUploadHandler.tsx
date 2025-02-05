@@ -13,13 +13,12 @@ interface FileUploadHandlerProps {
 export function FileUploadHandler({ onExtractedText, language = 'eng' }: FileUploadHandlerProps) {
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Initialize PDF.js worker
   useEffect(() => {
-    const setupPdfWorker = async () => {
-      const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.min.mjs');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker.default;
-    };
-    setupPdfWorker().catch(console.error);
+    if (typeof window !== 'undefined') {
+      import('pdfjs-dist/build/pdf.worker.min.mjs').then(pdfjsWorker => {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker.default;
+      });
+    }
   }, []);
 
   const processImage = async (file: File) => {
