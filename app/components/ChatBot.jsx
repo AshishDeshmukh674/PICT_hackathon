@@ -994,6 +994,14 @@ export default function ChatBot({ isOpen, onClose }) {
     try {
       switch(bookingStep) {
         case 0:
+          // Check if user is authenticated first
+          if (!currentUser || !currentUser.email) {
+            const errorMsg = "Please log in first to book an appointment.";
+            await speak(errorMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            setBookingStep(0); // Reset booking flow
+            break;
+          }
           setBookingStep(1);
           await speak(messages.provideName);
           setChatHistory(prev => [...prev, { role: "assistant", content: messages.provideName }]);
@@ -1004,9 +1012,9 @@ export default function ChatBot({ isOpen, onClose }) {
             const errorMsg = "Please provide a valid name.";
             await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Stay on the same step
             break;
           }
+          // Set both name and email (from authenticated user)
           setBookingData(prev => ({ ...prev, name: input }));
           setBookingStep(2);
           await speak(messages.provideEmail);
@@ -1514,7 +1522,7 @@ export default function ChatBot({ isOpen, onClose }) {
           }
           setMeetingData(prev => ({ ...prev, userEmail: input }));
           
-          // Fetch doctor list only once
+          // After email validation, fetch and show doctor list
           try {
             const doctorsResponse = await GlobalApi.getDoctorList();
             if (!isValidDoctorResponse(doctorsResponse)) {
@@ -1563,7 +1571,7 @@ export default function ChatBot({ isOpen, onClose }) {
           }]);
           break;
 
-        case 3: // Meeting name
+        case 3: // Meeting name - Remove the extra "Dr." prefix
           if (!input.trim()) {
             await speak("Please provide a valid meeting name.");
             setChatHistory(prev => [...prev, { 
@@ -1702,7 +1710,7 @@ export default function ChatBot({ isOpen, onClose }) {
           }]);
           break;
 
-        case 6: // Platform confirmation
+        case 6: // Platform confirmation and Zoom meeting creation
           if (input.toLowerCase() !== 'yes') {
             await speak("Please type 'yes' to confirm your Zoom meeting.");
             setChatHistory(prev => [...prev, { 
@@ -1722,19 +1730,25 @@ export default function ChatBot({ isOpen, onClose }) {
             
             const startTime = `${meetingData.selectedDate}T${String(militaryHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
 
-            // Create Zoom meeting with proper error handling
+            // Create Zoom meeting with better error handling
             try {
-              const response = await axios.post('/api/zoom', {
+              const zoomResponse = await axios.post('/api/zoom/create-meeting', {
                 topic: meetingData.eventName,
                 start_time: startTime,
                 duration: 30
               });
 
-              if (!response.data || !response.data.join_url) {
-                throw new Error('Invalid Zoom meeting response');
+              if (!zoomResponse.data) {
+                console.error('Empty response from Zoom API');
+                throw new Error('No response from Zoom API');
               }
 
-              const locationUrl = response.data.join_url;
+              if (!zoomResponse.data.join_url) {
+                console.error('Missing join_url in Zoom response:', zoomResponse.data);
+                throw new Error('Invalid Zoom meeting URL');
+              }
+
+              const locationUrl = zoomResponse.data.join_url;
 
               // Create the meeting in Firebase
               const id = Date.now().toString();
@@ -1789,12 +1803,13 @@ export default function ChatBot({ isOpen, onClose }) {
                 userEmail: "",
               });
             } catch (error) {
-              console.error('Error in Zoom meeting creation:', error);
-              throw new Error('Failed to create Zoom meeting');
+              console.error('Detailed Zoom error:', error.response?.data || error.message);
+              throw new Error(`Zoom meeting creation failed: ${error.message}`);
             }
+
           } catch (error) {
-            console.error('Error in meeting creation:', error);
-            const errorMessage = "Failed to schedule the meeting. Please try again.";
+            console.error('Meeting creation error:', error);
+            const errorMessage = "Unable to schedule the meeting. Please try again later.";
             await speak(errorMessage);
             setChatHistory(prev => [...prev, { 
               role: "assistant", 

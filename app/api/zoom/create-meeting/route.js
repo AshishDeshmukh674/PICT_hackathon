@@ -50,10 +50,10 @@ export async function POST(request) {
       duration: meetingData.duration || 30,
       timezone: meetingData.timezone || "Asia/Kolkata",
       settings: {
-        host_video: true,
-        participant_video: true,
+        host_video: false,
+        participant_video: false,
         join_before_host: true,
-        mute_upon_entry: false,
+        mute_upon_entry: true,
         auto_recording: "none",
         waiting_room: false,
         ...meetingData.settings
