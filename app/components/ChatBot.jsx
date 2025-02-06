@@ -10,6 +10,9 @@ import GlobalApi from "../_utils/GlobalApi";
 import axios from 'axios';
 import { FileUploadHandler } from "./FileUploadHandler";
 import { doctorTypes, extractDoctorType } from './doctorTypes';
+import { getFirestore, doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { app, auth } from '../config/FirebaseConfig';
+import { onAuthStateChanged } from "firebase/auth";
 
 const LANGUAGE_OPTIONS = {
   en: "English",
@@ -69,10 +72,13 @@ Please enter the number (1-3) for your choice.`,
     bookingSuccess: "Your appointment has been successfully booked! You will receive a confirmation message shortly.",
     bookingError: "Sorry, there was an error booking your appointment. Please try again.",
     processingError: "Sorry, there was an error processing your booking request. Please try again.",
-    provideEmailForCancellation: "Please provide your email to cancel the appointment.",
-    provideDateForCancellation: "Please provide the appointment date (DD/MM/YYYY).",
-    cancellationSuccess: "Your appointment has been successfully cancelled.",
-    cancellationError: "No appointment found for this email and date."
+    cancelPrompt: "Please provide your email address to cancel the appointment.",
+    cancelDatePrompt: "Please provide the appointment date to cancel (DD/MM/YYYY format).",
+    cancelSuccess: "Your appointment has been successfully cancelled.",
+    cancelNoAppointment: "No appointments found for the provided email and date.",
+    cancelError: "There was an error cancelling your appointment. Please try again.",
+    provideMeetingEmail: "Please provide your email address to schedule a meeting.",
+    invalidEmail: "Please provide a valid email address.",
   },
   hi: {
     welcome: "नमस्ते! मैं आपका मेडिकल असिस्टेंट हूं। मैं आपकी कैसे मदद कर सकता हूं? आप अपॉइंटमेंट बुक कर सकते हैं या स्वास्थ्य संबंधी प्रश्न पूछ सकते हैं।",
@@ -97,10 +103,13 @@ Please enter the number (1-3) for your choice.`,
     bookingSuccess: "आपका अपॉइंटमेंट सफलतापूर्वक बुक कर लिया गया है! आपको जल्द ही एक पुष्टिकरण संदेश प्राप्त होगा।",
     bookingError: "क्षमा करें, आपका अपॉइंटमेंट बुक करने में एक त्रुटि हुई। कृपया पुनः प्रयास करें।",
     processingError: "क्षमा करें, आपके बुकिंग अनुरोध को संसाधित करने में एक त्रुटि हुई। कृपया पुनः प्रयास करें।",
-    provideEmailForCancellation: "कृपया अपना ईमेल पता दें जिसे आप अपॉइंटमेंट रद्द करना चाहते हैं।",
-    provideDateForCancellation: "कृपया अपॉइंटमेंट की तिथि दें (DD/MM/YYYY)।",
-    cancellationSuccess: "आपका अपॉइंटमेंट सफलतापूर्वक रद्द कर लिया गया है।",
-    cancellationError: "इस ईमेल और तिथि के लिए कोई अपॉइंटमेंट नहीं मिला।"
+    cancelPrompt: "अपॉइंटमेंट रद्द करने के लिए कृपया अपना ईमेल पता प्रदान करें।",
+    cancelDatePrompt: "कृपया रद्द करने के लिए अपॉइंटमेंट की तारीख प्रदान करें (DD/MM/YYYY प्रारूप)।",
+    cancelSuccess: "आपका अपॉइंटमेंट सफलतापूर्वक रद्द कर दिया गया है।",
+    cancelNoAppointment: "दिए गए ईमेल और तारीख के लिए कोई अपॉइंटमेंट नहीं मिला।",
+    cancelError: "आपका अपॉइंटमेंट रद्द करने में एक त्रुटि हुई। कृपया पुनः प्रयास करें।",
+    provideMeetingEmail: "बैठक शेड्यूल करने के लिए कृपया अपना ईमेल पता प्रदान करें।",
+    invalidEmail: "कृपया एक वैध ईमेल पता प्रदान करें।",
   },
   mr: {
     welcome: "नमस्कार! मी तुमचा मेडिकल असिस्टंट आहे. मी तुम्हाला कशी मदत करू शकतो? तुम्ही अपॉइंटमेंट बुक करू शकता किंवा आरोग्याशी संबंधित प्रश्न विचारू शकता.",
@@ -108,6 +117,8 @@ Please enter the number (1-3) for your choice.`,
     provideEmail: "धन्यवाद. आता कृपया तुमचा ईमेल पत्ता द्या.",
     providePhone: "कृपया तुमचा फोन नंबर द्या.",
     // ... Add other Marathi translations
+    provideMeetingEmail: "मीटिंग शेड्यूल करण्यासाठी कृपया तुमचा ईमेल पत्ता द्या.",
+    invalidEmail: "कृपया वैध ईमेल पत्ता द्या.",
   },
   gu: {
     welcome: "નમસ્તે! હું તમારો મેડિકલ આસિસ્ટન્ટ છું. હું તમને કેવી રીતે મદદ કરી શકું? તમે એપોઇન્ટમેન્ટ બુક કરી શકો છો અથવા આરોગ્ય સંબંધિત પ્રશ્નો પૂછી શકો છો.",
@@ -115,6 +126,8 @@ Please enter the number (1-3) for your choice.`,
     provideEmail: "આભાર. હવે કૃપા કરીને તમારું ઈમેઈલ સરનામું આપો.",
     providePhone: "કૃપા કરીને તમારો ફોન નંબર આપો.",
     // ... Add other Gujarati translations
+    provideMeetingEmail: "મીટિંગ શેડ્યૂલ કરવા માટે કૃપા કરીને તમારું ઈમેઈલ સરનામું આપો.",
+    invalidEmail: "કૃપા કરીને માન્ય ઈમેઈલ સરનામું આપો.",
   }
 };
 
@@ -129,7 +142,7 @@ const NUMBER_WORDS = {
   },
   gu: {
     'એક': '1', 'બે': '2', 'ત્રણ': '3', 'ચાર': '4', 'પાંચ': '5',
-    'છ': '6', 'સાત': '7', 'આઠ': '8', 'નવ': '9', 'દસ': '10'
+    'છ': '6', 'सात': '7', 'आठ': '8', 'નવ': '9', 'દસ': '10'
   },
   en: {
     'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5',
@@ -308,20 +321,6 @@ const extractSymptoms = (input, language) => {
   return null;
 };
 
-// Add these constants for cancellation keywords
-const CANCELLATION_KEYWORDS = {
-    en: ['cancel', 'delete', 'remove', 'appointment'],
-    hi: ['रद्द', 'कैंसिल', 'अपॉइंटमेंट'],
-    mr: ['रद्द', 'कॅन्सल', 'अपॉइंटमेंट'],
-    gu: ['રદ', 'કેન્સલ', 'એપોઈન્ટમેન્ટ']
-};
-
-// Add this function to check if the message is about cancellation
-const isCancellationRequest = (text, language) => {
-    const keywords = [...CANCELLATION_KEYWORDS.en, ...(CANCELLATION_KEYWORDS[language] || [])];
-    return keywords.some(keyword => text.toLowerCase().includes(keyword.toLowerCase()));
-};
-
 function ChatHeader({ onClose }) {
   return (
     <div className="flex justify-between items-center p-4 border-b border-border">
@@ -343,36 +342,100 @@ function TypingAnimation() {
   );
 }
 
-const getTimeSlotsForDoctor = (doctorId) => {
-  const doctorTimeSlots = {
-    '3': {
-      'Morning Clinic': [[8, 30], [11, 30]],
+// Update the getTimeSlotsForDoctor function
+const getTimeSlotsForDoctor = (doctorId, forMeeting = false) => {
+  if (forMeeting) {
+    // Time slots for meetings (from PreviewMeeting.jsx)
+    const doctorTimeSlots = {
+      '3': { 
+        'Evening Clinic': [[20, 0], [22, 0]] // 8 PM to 10 PM
+      },
+      '4': { 
+        'Evening Clinic': [[20, 0], [22, 0]]
+      },
+      '5': {
+        'Evening Clinic': [[20, 0], [22, 0]]
+      },
+      '7': { 
+        'Evening Clinic': [[20, 0], [22, 0]]
+      }
+    };
+    return doctorTimeSlots[doctorId] || { 'Evening Clinic': [[20, 0], [22, 0]] }; // Default 8 PM to 10 PM
+  } else {
+    // Time slots for appointments (from BookAppointment.jsx)
+    const doctorTimeSlots = {
+      '3': {
+        'Morning Clinic': [[8, 30], [11, 30]],
+        'Evening Clinic': [[16, 0], [20, 0]],
+        'AfterNoon Clinic': [[13, 0], [16, 0]]
+      },
+      '4': {
+        'Morning Clinic': [[8, 0], [12, 0]],
+        'Evening Clinic': [[16, 0], [20, 0]],
+        'AfterNoon Clinic': [[13, 0], [16, 0]]
+      },
+      '5': {
+        'Morning Clinic': [[8, 30], [12, 0]],
+        'Evening Clinic': [[16, 0], [21, 0]],
+        'AfterNoon Clinic': [[13, 0], [16, 0]]
+      },
+      '7': {
+        'Morning Clinic': [[8, 0], [12, 0]],
+        'Evening Clinic': [[16, 0], [20, 0]],
+        'AfterNoon Clinic': [[13, 0], [16, 0]]
+      }
+    };
+    return doctorTimeSlots[doctorId] || {
+      'Morning Clinic': [[9, 0], [12, 0]],
       'Evening Clinic': [[16, 0], [20, 0]],
       'AfterNoon Clinic': [[13, 0], [16, 0]]
-    },
-    '4': {
-      'Morning Clinic': [[8, 0], [12, 0]],
-      'Evening Clinic': [[16, 0], [20, 0]],
-      'AfterNoon Clinic': [[13, 0], [16, 0]]
-    },
-    '5': {
-      'Morning Clinic': [[8, 30], [12, 0]],
-      'Evening Clinic': [[16, 0], [21, 0]],
-      'AfterNoon Clinic': [[13, 0], [16, 0]]
-    },
-    '7': {
-      'Morning Clinic': [[8, 0], [12, 0]],
-      'Evening Clinic': [[16, 0], [20, 0]],
-      'AfterNoon Clinic': [[13, 0], [16, 0]]
-    }
-  };
+    };
+  }
+};
 
-  // Default slots if doctor ID not found
-  return doctorTimeSlots[doctorId] || {
-    'Morning Clinic': [[9, 0], [12, 0]],
-    'Evening Clinic': [[16, 0], [20, 0]],
-    'AfterNoon Clinic': [[13, 0], [16, 0]]
-  };
+// Update the createTimeSlots function to handle the new time slot structure
+const createTimeSlots = (date, doctorId, interval = 30, bookedSlots = []) => {
+  const timeList = [];
+  const doctorSlots = getTimeSlotsForDoctor(doctorId, true); // For meetings
+  const eveningSlots = doctorSlots['Evening Clinic']; // Get Evening Clinic slots
+
+  if (!eveningSlots) {
+    console.error('No evening slots found for doctor:', doctorId);
+    return [];
+  }
+
+  const isToday = isSameDay(date, new Date());
+  const now = new Date();
+
+  let [currentHour, currentMinutes] = eveningSlots[0];
+  const [endHour, endMinutes] = eveningSlots[1];
+
+  while (currentHour < endHour || (currentHour === endHour && currentMinutes < endMinutes)) {
+    const slotTime = new Date(date);
+    slotTime.setHours(currentHour, currentMinutes);
+
+    if (isToday && slotTime <= now) {
+      currentMinutes += interval;
+      if (currentMinutes >= 60) {
+        currentHour += Math.floor(currentMinutes / 60);
+        currentMinutes = currentMinutes % 60;
+      }
+      continue;
+    }
+
+    const formattedTime = formatTime(slotTime);
+    if (!bookedSlots.includes(formattedTime)) {
+      timeList.push(formattedTime);
+    }
+
+    currentMinutes += interval;
+    if (currentMinutes >= 60) {
+      currentHour += Math.floor(currentMinutes / 60);
+      currentMinutes = currentMinutes % 60;
+    }
+  }
+
+  return timeList;
 };
 
 const formatTime = (date) => {
@@ -391,6 +454,7 @@ const isSameDay = (d1, d2) => {
          d1.getDate() === d2.getDate();
 };
 
+// Update the getAvailableTimeSlots function to handle clinic type properly
 const getAvailableTimeSlots = async (doctorId, date, clinicType) => {
   try {
     const dateStr = date.toLocaleDateString('en-CA');
@@ -401,7 +465,7 @@ const getAvailableTimeSlots = async (doctorId, date, clinicType) => {
 
     const timeList = [];
     const clinicTypeShort = clinicType.split(" - ")[0]; // Extract just the clinic type without location
-    const doctorSlots = getTimeSlotsForDoctor(doctorId.toString());
+    const doctorSlots = getTimeSlotsForDoctor(doctorId.toString(), false); // For appointments
     
     if (!doctorSlots[clinicTypeShort]) {
       console.error('No slots found for clinic type:', clinicTypeShort);
@@ -538,8 +602,35 @@ export default function ChatBot({ isOpen, onClose }) {
   const [selectedLanguage, setSelectedLanguage] = useState("en");
   const [isSpeaking, setIsSpeaking] = useState(false);
   const recognitionRef = useRef(null);
-  const [cancellationStep, setCancellationStep] = useState(0);
-  const [cancellationData, setCancellationData] = useState({ email: '', date: '' });
+  const [cancelStep, setCancelStep] = useState(0);
+  const [cancelData, setCancelData] = useState({
+    email: "",
+    date: ""
+  });
+  const [meetingStep, setMeetingStep] = useState(0);
+  const [meetingData, setMeetingData] = useState({
+    eventName: "",
+    duration: 30,
+    locationType: "",
+    locationUrl: "",
+    themeColor: "#4F46E5", // Default indigo color
+    doctorId: "",
+    selectedDate: "",
+    selectedTime: "",
+    clinicType: "Evening Clinic",
+    userEmail: "",
+  });
+
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Add useEffect to handle auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const forceLoadVoices = () => {
     return new Promise((resolve) => {
@@ -657,47 +748,29 @@ export default function ChatBot({ isOpen, onClose }) {
   
     const recognition = new webkitSpeechRecognition();
     recognition.continuous = false;
-    // Set proper recognition languages
     recognition.lang = selectedLanguage === "en" ? "en-US" : 
                       selectedLanguage === "hi" ? "hi-IN" : 
                       selectedLanguage === "mr" ? "mr-IN" : 
                       selectedLanguage === "gu" ? "gu-IN" : "en-US";
     recognition.interimResults = false;
-  
-    // ... rest of the recognition setup
+    recognition.maxAlternatives = 1;
+
+    // Add a longer timeout for speech detection
+    recognition.speechTimeout = 5000; // 5 seconds to start speaking
  
     recognition.onresult = async (event) => {
       const transcript = event.results[0][0].transcript;
-      // Clean the input text before processing
       const cleanedInput = cleanInputText(transcript);
       setUserInput(cleanedInput);
       
       try {
-        if (cancellationStep > 0) {
-          await handleCancellationFlow(cleanedInput);
-        } else if (bookingStep > 0) {
+        if (bookingStep > 0) {
           await handleBookingFlow(cleanedInput);
-        } else if (isCancellationRequest(cleanedInput, selectedLanguage)) {
-          setCancellationStep(1);
-          const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
-          await speak(messages.provideEmailForCancellation || "Please provide your email to cancel the appointment.");
-          setChatHistory(prev => [...prev, { 
-            role: "assistant", 
-            content: messages.provideEmailForCancellation || "Please provide your email to cancel the appointment."
-          }]);
-        } else if (input.toLowerCase().includes("book") || 
-                  input.toLowerCase().includes("appointment") || 
-                  input.toLowerCase().includes("अपॉइंटमेंट") || 
-                  input.toLowerCase().includes("बुक")) {
-          setBookingStep(1);
-          const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
-          await speak(messages.provideName);
-          setChatHistory(prev => [...prev, { 
-            role: "assistant", 
-            content: messages.provideName 
-          }]);
+        } else if (cancelStep > 0) {
+          await handleCancellationFlow(cleanedInput);
+        } else if (meetingStep > 0) {
+          await handleMeetingFlow(cleanedInput);
         } else {
-          // Normal chat flow
           await handleUserInput(cleanedInput);
         }
       } catch (error) {
@@ -707,16 +780,35 @@ export default function ChatBot({ isOpen, onClose }) {
 
     recognition.onerror = (event) => {
       console.error("Speech recognition error:", event.error);
-      if (event.error !== 'aborted') {
-        setError("Voice recognition failed. Please try again.");
+      
+      // Handle different types of errors
+      switch (event.error) {
+        case 'no-speech':
+          setError("No speech was detected. Please try again and speak clearly.");
+          break;
+        case 'audio-capture':
+          setError("No microphone was found. Ensure it is plugged in and allowed.");
+          break;
+        case 'not-allowed':
+          setError("Microphone permission was denied. Please allow microphone access.");
+          break;
+        case 'network':
+          setError("Network error occurred. Please check your internet connection.");
+          break;
+        case 'aborted':
+          // Don't show error for user-initiated stops
+          break;
+        default:
+          setError("Voice recognition failed. Please try again.");
       }
+      
       setIsRecording(false);
     };
 
     recognition.onend = () => {
       setIsRecording(false);
-      // Only restart if we're in booking flow and not processing
-      if (bookingStep > 0 && !error) {
+      // Only restart if we're in booking/cancel flow and not processing
+      if ((bookingStep > 0 || cancelStep > 0 || meetingStep > 0) && !error) {
         setTimeout(() => {
           try {
             if (!recognition.started) {
@@ -730,9 +822,14 @@ export default function ChatBot({ isOpen, onClose }) {
       }
     };
 
-    recognition.started = false;
     recognition.onstart = () => {
       recognition.started = true;
+      setError(null); // Clear any previous errors when starting new recognition
+      // Add a visual indicator that the bot is listening
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: "Listening... Please speak now." 
+      }]);
     };
 
     recognitionRef.current = recognition;
@@ -742,7 +839,7 @@ export default function ChatBot({ isOpen, onClose }) {
         recognition.stop();
       }
     };
-  }, [bookingStep, selectedLanguage]);
+  }, [bookingStep, cancelStep, meetingStep, selectedLanguage]);
 
   const handleUserInput = async (input) => {
     if (!input.trim()) return;
@@ -751,64 +848,134 @@ export default function ChatBot({ isOpen, onClose }) {
     setChatHistory(prev => [...prev, { role: "user", content: input }]);
 
     try {
-      // Clean the input text
-      const cleanedInput = cleanInputText(input);
-
-      // Check cancellation flow first
-      if (cancellationStep > 0) {
-        await handleCancellationFlow(cleanedInput);
-      } 
-      // Check for cancellation request before booking keywords
-      else if (isCancellationRequest(cleanedInput, selectedLanguage)) {
-        setCancellationStep(1);
+      if (cancelStep > 0) {
+        await handleCancellationFlow(input);
+      } else if (checkCancellationIntent(input)) {
+        setCancelStep(1);
         const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
-        await speak(messages.provideEmailForCancellation);
+        await speak(messages.cancelPrompt);
         setChatHistory(prev => [...prev, { 
           role: "assistant", 
-          content: messages.provideEmailForCancellation
+          content: messages.cancelPrompt 
         }]);
-      }
-      // Then check booking flow
-      else if (bookingStep > 0) {
-        await handleBookingFlow(cleanedInput);
-      }
-      // Then check for booking keywords
-      else if (cleanedInput.toLowerCase().includes("book") || 
-               cleanedInput.toLowerCase().includes("appointment") || 
-               cleanedInput.toLowerCase().includes("अपॉइंटमेंट") || 
-               cleanedInput.toLowerCase().includes("बुक")) {
-        setBookingStep(1);
-        const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
-        await speak(messages.provideName);
-        setChatHistory(prev => [...prev, { 
-          role: "assistant", 
-          content: messages.provideName 
-        }]);
-      }
-      // Normal chat flow
-      else {
-        const response = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            chatHistory: [...chatHistory, { role: "user", content: cleanedInput }],
-            language: selectedLanguage
-          }),
-        });
+      } else if (bookingStep > 0) {
+        await handleBookingFlow(input);
+      } else if (meetingStep > 0) {
+        await handleMeetingFlow(input);
+      } else {
+        // Check for symptoms
+        const symptoms = extractSymptoms(input, selectedLanguage);
+        if (symptoms) {
+          // Store symptoms in localStorage for use during appointment booking
+          localStorage.setItem('currentSymptoms', symptoms);
+          console.log('Symptoms stored:', symptoms);
+        }
 
-        if (!response.ok) throw new Error("Failed to get response from server");
+        // Check if we should start booking flow
+        if (input.toLowerCase().includes("book") || 
+            input.toLowerCase().includes("appointment") || 
+            input.toLowerCase().includes("अपॉइंटमेंट") || 
+            input.toLowerCase().includes("बुक")) {
+          setBookingStep(1);
+          const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
+          await speak(messages.provideName);
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: messages.provideName 
+          }]);
+        } else if (input.toLowerCase().includes("schedule") || 
+                   input.toLowerCase().includes("meeting") || 
+                   input.toLowerCase().includes("zoom") || 
+                   input.toLowerCase().includes("online")) {
+          try {
+            // Fetch doctor list with retry mechanism
+            let retryCount = 0;
+            let doctorsResponse = null;
+            
+            while (retryCount < 3) {
+              try {
+                doctorsResponse = await GlobalApi.getDoctorList();
+                if (isValidDoctorResponse(doctorsResponse)) {
+                  break;
+                }
+                retryCount++;
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+              } catch (err) {
+                console.error(`Attempt ${retryCount + 1} failed:`, err);
+                retryCount++;
+                if (retryCount === 3) throw err;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+            }
 
-        const data = await response.json();
-        await speak(data.response);
-        const llmResponse =data.response;
-        const doctorType = extractDoctorType(llmResponse);
-        // console.log(doctorType); // Output: "Cardiologist"
+            if (!isValidDoctorResponse(doctorsResponse)) {
+              throw new Error('Invalid doctor list response');
+            }
 
-        // // Get more info about the doctor type
-        // const doctorInfo = doctorTypes[doctorType];
-        // console.log(doctorInfo.description);
-        // console.log(doctorInfo.specialties);
-        setChatHistory(prev => [...prev, { role: "assistant", content: data.response }]);
+            const doctors = doctorsResponse.data.data;
+            setAvailableDoctors(doctors);
+
+            // Create doctor list string
+            const doctorList = doctors
+              .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name} (${doc.attributes.Profession})`)
+              .join('\n');
+
+            const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
+            const doctorPrompt = messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
+            
+            setMeetingStep(1);
+            await speak(doctorPrompt);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: doctorPrompt 
+            }]);
+          } catch (error) {
+            console.error('Doctor list fetch error:', error);
+            const errorMsg = "There was a problem fetching the doctor list. Please try again in a moment.";
+            await speak(errorMsg);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: errorMsg 
+            }]);
+          }
+        } else {
+          // Normal chat flow
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+              chatHistory: [...chatHistory, { role: "user", content: input }],
+              language: selectedLanguage || "en"
+            }),
+          });
+
+          if (!response.ok) throw new Error("Failed to get response from server");
+
+          const data = await response.json();
+          await speak(data.response);
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: data.response
+          }]);
+          const llmResponse =data.response;
+          const doctorType = extractDoctorType(llmResponse);
+          console.log(doctorType);
+          if(doctorType){
+            try{doctorlist_ = await GlobalApi.getDoctorByCategory(doctorType);
+            await speak(doctorlist)
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: doctorlist   
+            }]);}
+            catch (error) {
+              console.error("Error getting doctor list:", error);
+              await speak("Sorry, there was an error processing your request.");
+              setChatHistory(prev => [...prev, { role: "assistant", content: "Sorry, there was an error processing your request." }]);
+            } 
+          }
+
+
+        }
       }
     } catch (error) {
       console.error(error);
@@ -827,6 +994,14 @@ export default function ChatBot({ isOpen, onClose }) {
     try {
       switch(bookingStep) {
         case 0:
+          // Check if user is authenticated first
+          if (!currentUser || !currentUser.email) {
+            const errorMsg = "Please log in first to book an appointment.";
+            await speak(errorMsg);
+            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            setBookingStep(0); // Reset booking flow
+            break;
+          }
           setBookingStep(1);
           await speak(messages.provideName);
           setChatHistory(prev => [...prev, { role: "assistant", content: messages.provideName }]);
@@ -837,9 +1012,9 @@ export default function ChatBot({ isOpen, onClose }) {
             const errorMsg = "Please provide a valid name.";
             await speak(errorMsg);
             setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Stay on the same step
             break;
           }
+          // Set both name and email (from authenticated user)
           setBookingData(prev => ({ ...prev, name: input }));
           setBookingStep(2);
           await speak(messages.provideEmail);
@@ -1235,82 +1410,425 @@ export default function ChatBot({ isOpen, onClose }) {
     }
   }, [selectedLanguage]);
 
+  // Add this function to check for cancellation intent
+  const checkCancellationIntent = (input) => {
+    const cancelKeywords = {
+      en: ['cancel', 'delete', 'remove'],
+      hi: ['रद्द', 'कैंसिल', 'मिटा'],
+      mr: ['रद्द', 'कॅन्सल', 'काढून'],
+      gu: ['રદ', 'કેન્સલ', 'કાઢી']
+    };
+
+    const keywords = cancelKeywords[selectedLanguage] || cancelKeywords.en;
+    return keywords.some(keyword => 
+      input.toLowerCase().includes(keyword.toLowerCase())
+    );
+  };
+
+  // Add this new function to handle cancellation flow
   const handleCancellationFlow = async (input) => {
     const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
     
     try {
-        switch(cancellationStep) {
-            case 1: // Email input
-                // Add dot after '@gmail' if missing
-                let emailInput = input.trim();
-                if (emailInput.includes('@gmail') && !emailInput.includes('@gmail.')) {
-                    emailInput = emailInput.replace('@gmailcom', '@gmail.com');
-                }
-                
-                setCancellationData(prev => ({ ...prev, email: emailInput }));
-                console.log('Stored email:', emailInput);
-                
-                setCancellationStep(2);
-                await speak(messages.provideDateForCancellation || "Please provide the appointment date (DD/MM/YYYY).");
-                setChatHistory(prev => [...prev, { 
-                    role: "assistant", 
-                    content: messages.provideDateForCancellation || "Please provide the appointment date (DD/MM/YYYY)."
-                }]);
-                break;
+      switch(cancelStep) {
+        case 1: // Email step
+          setCancelData(prev => ({ ...prev, email: input }));
+          setCancelStep(2);
+          await speak(messages.cancelDatePrompt);
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: messages.cancelDatePrompt 
+          }]);
+          break;
 
-            case 2: // Date input
-                const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-                const cleanedDate = input.trim();
-                console.log('Cancellation data:', cancellationData);
-                
-                if (!dateRegex.test(cleanedDate)) {
-                    await speak(messages.invalidDateFormat || "Please provide the date in DD/MM/YYYY format.");
-                    setChatHistory(prev => [...prev, { 
-                        role: "assistant", 
-                        content: messages.invalidDateFormat || "Please provide the date in DD/MM/YYYY format."
-                    }]);
-                    break;
-                }
+        case 2: // Date step
+          const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+          if (!dateRegex.test(input)) {
+            await speak(messages.invalidDateFormat);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.invalidDateFormat 
+            }]);
+            break;
+          }
 
-                try {
-                    const userEmail = cancellationData.email;
-                    console.log('Attempting to cancel appointment:', {
-                        email: userEmail,
-                        date: cleanedDate,
-                    });
-                    
-                    await GlobalApi.cancelAppointmentByEmailDate(userEmail, cleanedDate);
-                    
-                    await speak(messages.cancellationSuccess || "Your appointment has been successfully cancelled.");
-                    setChatHistory(prev => [...prev, { 
-                        role: "assistant", 
-                        content: messages.cancellationSuccess || "Your appointment has been successfully cancelled."
-                    }]);
-                } catch (error) {
-                    console.error('Cancellation error:', error);
-                    const errorMessage = error.response?.data?.error?.message || 
-                        messages.cancellationError || 
-                        "No appointment found for this email and date.";
-                    
-                    await speak(errorMessage);
-                    setChatHistory(prev => [...prev, { 
-                        role: "assistant", 
-                        content: errorMessage
-                    }]);
-                }
-                
-                // Reset cancellation flow
-                setCancellationStep(0);
-                setCancellationData({ email: '', date: '' });
-                break;
-        }
+          setCancelData(prev => ({ ...prev, date: input }));
+          
+          try {
+            await GlobalApi.cancelAppointmentByEmailDate(cancelData.email, input);
+            await speak(messages.cancelSuccess);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.cancelSuccess 
+            }]);
+          } catch (error) {
+            console.error('Cancellation error:', error);
+            const errorMessage = error.message === 'No appointment found for this email and date'
+              ? messages.cancelNoAppointment
+              : messages.cancelError;
+            
+            await speak(errorMessage);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: errorMessage 
+            }]);
+          }
+          
+          setCancelStep(0); // Reset cancellation flow
+          setCancelData({ email: "", date: "" }); // Clear cancellation data
+          break;
+      }
     } catch (error) {
-        console.error('Error in cancellation flow:', error);
-        await speak(messages.processingError || "Sorry, there was an error processing your request.");
-        setCancellationStep(0);
-        setCancellationData({ email: '', date: '' });
+      console.error('Error in cancellation flow:', error);
+      await speak(messages.cancelError);
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: messages.cancelError 
+      }]);
+      setCancelStep(0);
+      setCancelData({ email: "", date: "" });
     }
-};
+  };
+
+  // Add email validation function
+  const isValidEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  // Update the handleMeetingFlow function
+  const handleMeetingFlow = async (input) => {
+    const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
+    
+    try {
+      switch(meetingStep) {
+        case 0:
+          setMeetingStep(1);
+          await speak(messages.provideMeetingEmail);
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: messages.provideMeetingEmail 
+          }]);
+          break;
+
+        case 1: // Email validation step
+          if (!isValidEmail(input)) {
+            await speak(messages.invalidEmail);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.invalidEmail 
+            }]);
+            break;
+          }
+          setMeetingData(prev => ({ ...prev, userEmail: input }));
+          
+          // After email validation, fetch and show doctor list
+          try {
+            const doctorsResponse = await GlobalApi.getDoctorList();
+            if (!isValidDoctorResponse(doctorsResponse)) {
+              throw new Error('Invalid doctor list response');
+            }
+            const doctors = doctorsResponse.data.data;
+            setAvailableDoctors(doctors);
+            
+            const doctorList = doctors
+              .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name}`)
+              .join('\n');
+            
+            const doctorPrompt = messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
+            await speak(doctorPrompt);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: doctorPrompt 
+            }]);
+            setMeetingStep(2);
+          } catch (error) {
+            console.error('Error fetching doctors:', error);
+            await speak("Failed to fetch doctor list. Please try again.");
+            setMeetingStep(0);
+          }
+          break;
+
+        case 2: // Doctor selection
+          const doctorId = parseInt(convertNumberWordsToDigits(input, selectedLanguage));
+          const selectedDoctor = availableDoctors.find(doc => doc.id === doctorId);
+          
+          if (!selectedDoctor) {
+            await speak(messages.invalidDoctorId);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.invalidDoctorId 
+            }]);
+            break;
+          }
+          
+          setMeetingData(prev => ({ ...prev, doctorId }));
+          setMeetingStep(3);
+          await speak(`You've selected Dr. ${selectedDoctor.attributes.Name}. Please provide a name for your meeting (e.g., 'Follow-up Consultation')`);
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: `You've selected Dr. ${selectedDoctor.attributes.Name}. Please provide a name for your meeting (e.g., 'Follow-up Consultation')` 
+          }]);
+          break;
+
+        case 3: // Meeting name - Remove the extra "Dr." prefix
+          if (!input.trim()) {
+            await speak("Please provide a valid meeting name.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "Please provide a valid meeting name." 
+            }]);
+            break;
+          }
+
+          setMeetingData(prev => ({ ...prev, eventName: input }));
+          setMeetingStep(4);
+          await speak("Please provide the meeting date in DD/MM/YYYY format.");
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: "Please provide the meeting date in DD/MM/YYYY format." 
+          }]);
+          break;
+
+        case 4: // Date selection
+          const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+          const match = input.match(dateRegex);
+          
+          if (!match) {
+            await speak("Please provide the date in DD/MM/YYYY format.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "Please provide the date in DD/MM/YYYY format." 
+            }]);
+            break;
+          }
+
+          const [, day, month, year] = match;
+          const selectedDate = new Date(year, month - 1, day);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          if (selectedDate < today) {
+            await speak("Please select a future date.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "Please select a future date." 
+            }]);
+            break;
+          }
+
+          if (selectedDate.getDay() === 0) {
+            await speak("Sorry, we are closed on Sundays. Please select another date.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "Sorry, we are closed on Sundays. Please select another date." 
+            }]);
+            break;
+          }
+
+          try {
+            // Format date for Firebase
+            const formattedDate = selectedDate.toISOString().split('T')[0];
+            
+            // Fetch booked meetings from Firebase
+            const db = getFirestore(app);
+            const meetingsRef = collection(db, "MeetingEvent");
+            const q = query(meetingsRef, 
+              where("doctorId", "==", meetingData.doctorId),
+              where("selectedDate", "==", formattedDate)
+            );
+            
+            const querySnapshot = await getDocs(q);
+            const bookedSlots = [];
+            
+            querySnapshot.forEach((doc) => {
+              const data = doc.data();
+              bookedSlots.push(data.selectedTime);
+            });
+            
+            console.log('Current doctorId:', meetingData.doctorId);
+            console.log('Booked slots:', bookedSlots);
+            
+            // Get available time slots
+            const availableSlots = createTimeSlots(selectedDate, meetingData.doctorId, 30, bookedSlots);
+            console.log('Available slots:', availableSlots);
+
+            if (availableSlots.length === 0) {
+              await speak("No time slots available for this date. Please select another date.");
+              setChatHistory(prev => [...prev, { 
+                role: "assistant", 
+                content: "No time slots available for this date. Please select another date." 
+              }]);
+              break;
+            }
+
+            // Update meeting data and state
+            setMeetingData(prev => ({ ...prev, selectedDate: formattedDate }));
+            setAvailableTimeSlots(availableSlots);
+            
+            await speak(`Available evening time slots are: ${availableSlots.join(', ')}. Please choose a time slot.`);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: `Available evening time slots are: ${availableSlots.join(', ')}. Please choose a time slot.` 
+            }]);
+            setMeetingStep(5);
+          } catch (error) {
+            console.error('Error processing date selection:', error);
+            await speak("There was an error processing the date. Please try again.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "There was an error processing the date. Please try again." 
+            }]);
+          }
+          break;
+
+        case 5: // Time selection
+          const convertedTime = convertTimeExpression(input, selectedLanguage);
+          const selectedTime = convertedTime.trim().toUpperCase();
+          
+          if (!availableTimeSlots.includes(selectedTime)) {
+            await speak("Please select a valid time slot from the list provided.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "Please select a valid time slot from the list provided." 
+            }]);
+            // Show available slots again
+            await speak(`Available time slots are: ${availableTimeSlots.join(', ')}`);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: `Available time slots are: ${availableTimeSlots.join(', ')}` 
+            }]);
+            break;
+          }
+
+          setMeetingData(prev => ({ ...prev, selectedTime }));
+          setMeetingStep(6);
+          await speak("Your meeting will be scheduled on Zoom. Type 'yes' to confirm.");
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: "Your meeting will be scheduled on Zoom. Type 'yes' to confirm." 
+          }]);
+          break;
+
+        case 6: // Platform confirmation and Zoom meeting creation
+          if (input.toLowerCase() !== 'yes') {
+            await speak("Please type 'yes' to confirm your Zoom meeting.");
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: "Please type 'yes' to confirm your Zoom meeting." 
+            }]);
+            break;
+          }
+
+          try {
+            // Convert time to proper format for Zoom API
+            const [time, period] = meetingData.selectedTime.split(' ');
+            const [hours, minutes] = time.split(':').map(Number);
+            let militaryHours = hours;
+            if (period === 'PM' && hours !== 12) militaryHours += 12;
+            if (period === 'AM' && hours === 12) militaryHours = 0;
+            
+            const startTime = `${meetingData.selectedDate}T${String(militaryHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+
+            // Create Zoom meeting with better error handling
+            try {
+              const zoomResponse = await axios.post('/api/zoom/create-meeting', {
+                topic: meetingData.eventName,
+                start_time: startTime,
+                duration: 30
+              });
+
+              if (!zoomResponse.data) {
+                console.error('Empty response from Zoom API');
+                throw new Error('No response from Zoom API');
+              }
+
+              if (!zoomResponse.data.join_url) {
+                console.error('Missing join_url in Zoom response:', zoomResponse.data);
+                throw new Error('Invalid Zoom meeting URL');
+              }
+
+              const locationUrl = zoomResponse.data.join_url;
+
+              // Create the meeting in Firebase
+              const id = Date.now().toString();
+              const db = getFirestore(app);
+              
+              const meetingDoc = {
+                id,
+                eventName: meetingData.eventName,
+                duration: 30,
+                locationType: "Zoom",
+                locationUrl: locationUrl,
+                selectedDate: meetingData.selectedDate,
+                selectedTime: meetingData.selectedTime,
+                themeColor: "#4F46E5",
+                businessId: `/Business/${meetingData.userEmail}`,
+                createdBy: meetingData.userEmail,
+                createdAt: new Date().toISOString(),
+                doctorId: meetingData.doctorId,
+                clinicType: "Evening Clinic",
+                clinicTiming: "8:00 PM - 10:00 PM"
+              };
+
+              // Verify all required fields are present
+              const requiredFields = ['id', 'eventName', 'locationUrl', 'selectedDate', 'selectedTime', 'businessId', 'createdBy', 'doctorId'];
+              const missingFields = requiredFields.filter(field => !meetingDoc[field]);
+              
+              if (missingFields.length > 0) {
+                throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+              }
+
+              await setDoc(doc(db, "MeetingEvent", id), meetingDoc);
+
+              const successMessage = "Your Zoom meeting has been scheduled successfully!";
+              await speak(successMessage);
+              setChatHistory(prev => [...prev, { 
+                role: "assistant", 
+                content: successMessage 
+              }]);
+
+              // Reset meeting flow
+              setMeetingStep(0);
+              setMeetingData({
+                eventName: "",
+                duration: 30,
+                locationType: "",
+                locationUrl: "",
+                themeColor: "#4F46E5",
+                doctorId: "",
+                selectedDate: "",
+                selectedTime: "",
+                clinicType: "Evening Clinic",
+                userEmail: "",
+              });
+            } catch (error) {
+              console.error('Detailed Zoom error:', error.response?.data || error.message);
+              throw new Error(`Zoom meeting creation failed: ${error.message}`);
+            }
+
+          } catch (error) {
+            console.error('Meeting creation error:', error);
+            const errorMessage = "Unable to schedule the meeting. Please try again later.";
+            await speak(errorMessage);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: errorMessage 
+            }]);
+            setMeetingStep(0);
+          }
+          break;
+      }
+    } catch (error) {
+      console.error('Error in handleMeetingFlow:', error);
+      await speak("Sorry, there was an error processing your request. Please try again.");
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: "Sorry, there was an error processing your request. Please try again." 
+      }]);
+      setMeetingStep(0);
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -1328,8 +1846,10 @@ export default function ChatBot({ isOpen, onClose }) {
             ))}
             {isLoading && <TypingAnimation />}
             <div className="mt-4">
-              <FileUploadHandler onExtractedText={handleExtractedText} />
-            </div>
+            <FileUploadHandler 
+  onExtractedText={handleExtractedText} 
+  language={selectedLanguage} 
+/>            </div>
           </ScrollArea>
           <div className="p-4 border-t border-gray-200">
             <div className="flex justify-end mb-2">
