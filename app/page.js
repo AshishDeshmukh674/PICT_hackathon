@@ -11,7 +11,7 @@ import dynamic from 'next/dynamic';
 import Campaign from './_components/campaign'
 import Gallery from './_components/Gallery'
 import DoctorLogin from "./_components/doctorLogin"; // Correct path for DoctorLogin
-import ChatBot from '../components/ChatBot';
+import ChatBot from '../app/components/ChatBot';
 
 // Dynamically import MapComponent with server-side rendering disabled
 const MapComponent = dynamic(() => import('./_components/map'), { ssr: false });

@@ -623,6 +623,8 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
   });
 
   const [currentUser, setCurrentUser] = useState(null);
+  const [canStartRecording, setCanStartRecording] = useState(true);
+  const [isTyping, setIsTyping] = useState(false);
 
   // Add useEffect to handle auth state
   useEffect(() => {
@@ -701,17 +703,27 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
         utterance.pitch = 1;
         utterance.volume = 1;
 
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => setIsSpeaking(false);
+        utterance.onstart = () => {
+          setIsSpeaking(true);
+          setCanStartRecording(false); // Disable recording while speaking
+        };
+        
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          setCanStartRecording(true); // Re-enable recording after speaking
+        };
+        
         utterance.onerror = (event) => {
           console.error('Speech synthesis error:', event);
           setIsSpeaking(false);
+          setCanStartRecording(true); // Re-enable recording on error
         };
 
         speechSynthesis.speak(utterance);
       } catch (error) {
         console.error('Error in speak function:', error);
         setIsSpeaking(false);
+        setCanStartRecording(true);
       }
     }
   };
