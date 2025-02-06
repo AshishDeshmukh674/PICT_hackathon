@@ -2021,3 +2021,18 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     </AnimatePresence>
   );
 }
+// Update the Button component for recording
+const RecordButton = () => (
+  <Button 
+    variant="outline" 
+    onClick={toggleRecording}
+    disabled={!canStartRecording}
+    className={`${!canStartRecording ? 'opacity-50 cursor-not-allowed' : ''}`}
+    title={!canStartRecording ? "Please wait for the response to finish" : "Start/Stop Recording"}
+  >
+    {isRecording ? 
+      <StopCircle className="w-4 h-4 text-red-500" /> : 
+      <Mic className="w-4 h-4" />
+    }
+  </Button>
+);
