@@ -11,13 +11,15 @@ import dynamic from 'next/dynamic';
 import Campaign from './_components/campaign'
 import Gallery from './_components/Gallery'
 import DoctorLogin from "./_components/doctorLogin"; // Correct path for DoctorLogin
-import Chatbot from "./chat/page"
+import ChatBot from '../components/ChatBot';
 
 // Dynamically import MapComponent with server-side rendering disabled
 const MapComponent = dynamic(() => import('./_components/map'), { ssr: false });
 export default function Home() {
 
 const [doctorList,setDoctorList]=useState( []);
+const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+
 useEffect(()=>{
   getDoctorList();
 },[])
@@ -59,7 +61,11 @@ useEffect(()=>{
           <MapComponent />
         </div>
         <div className="fixed bottom-20 right-4 z-[1000]">
-          <Chatbot />
+          <ChatBot 
+            isOpen={isChatbotOpen} 
+            onClose={() => setIsChatbotOpen(false)}
+            onOpen={() => setIsChatbotOpen(true)}
+          />
         </div>
       </div>
     </>
