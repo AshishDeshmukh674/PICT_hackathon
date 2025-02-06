@@ -1629,7 +1629,7 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
           }]);
           break;
 
-        case 3: // Meeting name - Remove the extra "Dr." prefix
+        case 3: // Meeting name
           if (!input.trim()) {
             await speak("Please provide a valid meeting name.");
             setChatHistory(prev => [...prev, { 
@@ -1685,7 +1685,6 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
           }
 
           try {
-            // Format date for Firebase
             const formattedDate = selectedDate.toISOString().split('T')[0];
             
             // Fetch booked meetings from Firebase
@@ -1698,18 +1697,12 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
             
             const querySnapshot = await getDocs(q);
             const bookedSlots = [];
-            
             querySnapshot.forEach((doc) => {
-              const data = doc.data();
-              bookedSlots.push(data.selectedTime);
+              bookedSlots.push(doc.data().selectedTime);
             });
-            
-            console.log('Current doctorId:', meetingData.doctorId);
-            console.log('Booked slots:', bookedSlots);
             
             // Get available time slots
             const availableSlots = createTimeSlots(selectedDate, meetingData.doctorId, 30, bookedSlots);
-            console.log('Available slots:', availableSlots);
 
             if (availableSlots.length === 0) {
               await speak("No time slots available for this date. Please select another date.");
@@ -1720,7 +1713,6 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
               break;
             }
 
-            // Update meeting data and state
             setMeetingData(prev => ({ ...prev, selectedDate: formattedDate }));
             setAvailableTimeSlots(availableSlots);
             
@@ -1740,7 +1732,7 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
           }
           break;
 
-        case 5: // Time selection
+        case 5: // Time selection and Zoom meeting creation
           const convertedTime = convertTimeExpression(input, selectedLanguage);
           const selectedTime = convertedTime.trim().toUpperCase();
           
@@ -1750,37 +1742,13 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
               role: "assistant", 
               content: "Please select a valid time slot from the list provided." 
             }]);
-            // Show available slots again
             await speak(`Available time slots are: ${availableTimeSlots.join(', ')}`);
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: `Available time slots are: ${availableTimeSlots.join(', ')}` 
-            }]);
-            break;
-          }
-
-          setMeetingData(prev => ({ ...prev, selectedTime }));
-          setMeetingStep(6);
-          await speak("Your meeting will be scheduled on Zoom. Type 'yes' to confirm.");
-          setChatHistory(prev => [...prev, { 
-            role: "assistant", 
-            content: "Your meeting will be scheduled on Zoom. Type 'yes' to confirm." 
-          }]);
-          break;
-
-        case 6: // Platform confirmation and Zoom meeting creation
-          if (input.toLowerCase() !== 'yes') {
-            await speak("Please type 'yes' to confirm your Zoom meeting.");
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: "Please type 'yes' to confirm your Zoom meeting." 
-            }]);
             break;
           }
 
           try {
-            // Convert time to proper format for Zoom API
-            const [time, period] = meetingData.selectedTime.split(' ');
+            // Create Zoom meeting
+            const [time, period] = selectedTime.split(' ');
             const [hours, minutes] = time.split(':').map(Number);
             let militaryHours = hours;
             if (period === 'PM' && hours !== 12) militaryHours += 12;
@@ -1788,83 +1756,60 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
             
             const startTime = `${meetingData.selectedDate}T${String(militaryHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
 
-            // Create Zoom meeting with better error handling
-            try {
-              const zoomResponse = await axios.post('/api/zoom/create-meeting', {
-                topic: meetingData.eventName,
-                start_time: startTime,
-                duration: 30
-              });
+            const zoomResponse = await axios.post('/api/zoom/create-meeting', {
+              topic: meetingData.eventName,
+              start_time: startTime,
+              duration: 30
+            });
 
-              if (!zoomResponse.data) {
-                console.error('Empty response from Zoom API');
-                throw new Error('No response from Zoom API');
-              }
-
-              if (!zoomResponse.data.join_url) {
-                console.error('Missing join_url in Zoom response:', zoomResponse.data);
-                throw new Error('Invalid Zoom meeting URL');
-              }
-
-              const locationUrl = zoomResponse.data.join_url;
-
-              // Create the meeting in Firebase
-              const id = Date.now().toString();
-              const db = getFirestore(app);
-              
-              const meetingDoc = {
-                id,
-                eventName: meetingData.eventName,
-                duration: 30,
-                locationType: "Zoom",
-                locationUrl: locationUrl,
-                selectedDate: meetingData.selectedDate,
-                selectedTime: meetingData.selectedTime,
-                themeColor: "#4F46E5",
-                businessId: `/Business/${meetingData.userEmail}`,
-                createdBy: meetingData.userEmail,
-                createdAt: new Date().toISOString(),
-                doctorId: meetingData.doctorId,
-                clinicType: "Evening Clinic",
-                clinicTiming: "8:00 PM - 10:00 PM"
-              };
-
-              // Verify all required fields are present
-              const requiredFields = ['id', 'eventName', 'locationUrl', 'selectedDate', 'selectedTime', 'businessId', 'createdBy', 'doctorId'];
-              const missingFields = requiredFields.filter(field => !meetingDoc[field]);
-              
-              if (missingFields.length > 0) {
-                throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
-              }
-
-              await setDoc(doc(db, "MeetingEvent", id), meetingDoc);
-
-              const successMessage = "Your Zoom meeting has been scheduled successfully!";
-              await speak(successMessage);
-              setChatHistory(prev => [...prev, { 
-                role: "assistant", 
-                content: successMessage 
-              }]);
-
-              // Reset meeting flow
-              setMeetingStep(0);
-              setMeetingData({
-                eventName: "",
-                duration: 30,
-                locationType: "",
-                locationUrl: "",
-                themeColor: "#4F46E5",
-                doctorId: "",
-                selectedDate: "",
-                selectedTime: "",
-                clinicType: "Evening Clinic",
-                userEmail: "",
-              });
-            } catch (error) {
-              console.error('Detailed Zoom error:', error.response?.data || error.message);
-              throw new Error(`Zoom meeting creation failed: ${error.message}`);
+            if (!zoomResponse.data?.join_url) {
+              throw new Error('Invalid Zoom meeting URL');
             }
 
+            // Save to Firebase
+            const id = Date.now().toString();
+            const db = getFirestore(app);
+            
+            const meetingDoc = {
+              id,
+              eventName: meetingData.eventName,
+              duration: 30,
+              locationType: "Zoom",
+              locationUrl: zoomResponse.data.join_url,
+              selectedDate: meetingData.selectedDate,
+              selectedTime: selectedTime,
+              themeColor: "#4F46E5",
+              businessId: `/Business/${meetingData.userEmail}`,
+              createdBy: meetingData.userEmail,
+              createdAt: new Date().toISOString(),
+              doctorId: meetingData.doctorId,
+              clinicType: "Evening Clinic",
+              clinicTiming: "8:00 PM - 10:00 PM"
+            };
+
+            await setDoc(doc(db, "MeetingEvent", id), meetingDoc);
+
+            const successMessage = "Your Zoom meeting has been scheduled successfully!";
+            await speak(successMessage);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: successMessage 
+            }]);
+
+            // Reset meeting flow
+            setMeetingStep(0);
+            setMeetingData({
+              eventName: "",
+              duration: 30,
+              locationType: "",
+              locationUrl: "",
+              themeColor: "#4F46E5",
+              doctorId: "",
+              selectedDate: "",
+              selectedTime: "",
+              clinicType: "Evening Clinic",
+              userEmail: "",
+            });
           } catch (error) {
             console.error('Meeting creation error:', error);
             const errorMessage = "Unable to schedule the meeting. Please try again later.";

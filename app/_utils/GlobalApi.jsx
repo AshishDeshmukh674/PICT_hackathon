@@ -3,8 +3,8 @@ import axios from 'axios';
 const API_KEY = process.env.NEXT_PUBLIC_STRAPI_API_KEY;
 
 const axiosClient = axios.create({
-    //baseURL: 'https://appointment-booking-strapi.onrender.com/api',
-    baseURL:'http://127.0.0.1:1337/api',
+    baseURL: 'https://appointment-booking-strapi.onrender.com/api',
+    // baseURL:'http://127.0.0.1:1337/api',
     headers: {
         'Authorization': `Bearer ${API_KEY}`
     }
