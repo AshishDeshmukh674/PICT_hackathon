@@ -348,14 +348,14 @@ function TypingAnimation() {
 const getTimeSlotsForDoctor = (doctorId, forMeeting = false) => {
   if (forMeeting) {
     // Time slots for meetings (from PreviewMeeting.jsx)
-    const doctorTimeSlots = {
+  const doctorTimeSlots = {
       '3': { 
         'Evening Clinic': [[20, 0], [22, 0]] // 8 PM to 10 PM
       },
-      '4': { 
+    '4': { 
         'Evening Clinic': [[20, 0], [22, 0]]
-      },
-      '5': {
+    },
+    '5': {
         'Evening Clinic': [[20, 0], [22, 0]]
       },
       '7': { 
@@ -487,27 +487,27 @@ const getAvailableTimeSlots = async (doctorId, date, clinicType) => {
       currentHour < endHour || 
       (currentHour === endHour && currentMinutes <= endMinutes)
     ) {
-      const slotTime = new Date(date);
-      slotTime.setHours(currentHour, currentMinutes);
+        const slotTime = new Date(date);
+        slotTime.setHours(currentHour, currentMinutes);
 
-      if (isToday && slotTime <= now) {
-        currentMinutes += 15;
+        if (isToday && slotTime <= now) {
+          currentMinutes += 15;
         if (currentMinutes >= 60) {
+            currentHour++;
+            currentMinutes = 0;
+          }
+          continue;
+        }
+
+        const formattedTime = formatTime(slotTime);
+        if (!bookedSlots.includes(formattedTime)) {
+          timeList.push(formattedTime);
+        }
+
+        currentMinutes += 15;
+      if (currentMinutes >= 60) {
           currentHour++;
           currentMinutes = 0;
-        }
-        continue;
-      }
-
-      const formattedTime = formatTime(slotTime);
-      if (!bookedSlots.includes(formattedTime)) {
-        timeList.push(formattedTime);
-      }
-
-      currentMinutes += 15;
-      if (currentMinutes >= 60) {
-        currentHour++;
-        currentMinutes = 0;
       }
     }
 
@@ -762,7 +762,7 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
       setError("Voice recognition is not supported in your browser.");
       return;
     }
-  
+
     const recognition = new webkitSpeechRecognition();
     recognition.continuous = false;
     recognition.lang = selectedLanguage === "en" ? "en-US" : 
@@ -819,7 +819,7 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
           // Don't show error for user-initiated stops
           break;
         default:
-          setError("Voice recognition failed. Please try again.");
+      setError("Voice recognition failed. Please try again.");
       }
       
       setIsRecording(false);
@@ -960,18 +960,18 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
           }
         } else {
           // Normal chat flow
-          const response = await fetch("/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
               chatHistory: [...chatHistory, { role: "user", content: input }],
               language: selectedLanguage || "en"
-            }),
-          });
+          }),
+        });
 
-          if (!response.ok) throw new Error("Failed to get response from server");
+        if (!response.ok) throw new Error("Failed to get response from server");
 
-          const data = await response.json();
+        const data = await response.json();
           await speak(data.response);
           setChatHistory(prev => [...prev, { 
             role: "assistant", 
@@ -1101,8 +1101,8 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
             console.log('Doctor list:', doctorList);
 
             await speak(doctorPrompt);
-            setChatHistory(prev => [...prev, { role: "assistant", content: doctorPrompt }]);
-            setBookingStep(4);
+          setChatHistory(prev => [...prev, { role: "assistant", content: doctorPrompt }]);
+          setBookingStep(4);
 
           } catch (error) {
             console.error('Doctor list fetch error:', {
@@ -1210,7 +1210,7 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
           if (!['1', '2', '3'].includes(clinicChoice)) {
             const errorMsg = messages.invalidClinic;
             await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+              setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
             await speak(messages.chooseClinic);
             break;
           }
@@ -1224,28 +1224,28 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
           setClinicType(selectedClinic);
 
           try {
-            const slots = await getAvailableTimeSlots(
-              bookingData.doctorId, 
-              new Date(bookingData.date),
-              selectedClinic
-            );
-            
+          const slots = await getAvailableTimeSlots(
+            bookingData.doctorId, 
+            new Date(bookingData.date), 
+            selectedClinic
+          );
+          
             console.log('Available slots:', slots); // Debug log
             
             if (!slots || slots.length === 0) {
               const noSlotsMsg = messages.noTimeSlots;
               await speak(noSlotsMsg);
-              setChatHistory(prev => [...prev, { role: "assistant", content: noSlotsMsg }]);
+            setChatHistory(prev => [...prev, { role: "assistant", content: noSlotsMsg }]);
               // Show clinic options again
               await speak(messages.chooseClinic);
-              break;
-            }
+            break;
+          }
 
             const slotsPrompt = messages.availableSlots.replace('{slots}', slots.join('\n'));
             await speak(slotsPrompt);
-            setChatHistory(prev => [...prev, { role: "assistant", content: slotsPrompt }]);
-            setAvailableTimeSlots(slots);
-            setBookingStep(7);
+          setChatHistory(prev => [...prev, { role: "assistant", content: slotsPrompt }]);
+          setAvailableTimeSlots(slots);
+          setBookingStep(7);
           } catch (error) {
             console.error('Error getting time slots:', error);
             const errorMsg = messages.processingError;
@@ -1396,12 +1396,12 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
 
   const toggleRecording = () => {
     try {
-      if (isRecording) {
+    if (isRecording) {
         if (recognitionRef.current?.started) {
           recognitionRef.current.stop();
         }
         setIsRecording(false);
-      } else {
+    } else {
         if (!canStartRecording) {
           toast.error("Please wait for the current response to finish");
           return;
@@ -1917,6 +1917,22 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     isSpeaking
   });
 
+  // Move RecordButton inside the main component
+  const RecordButton = () => (
+    <Button 
+      variant="outline" 
+      onClick={toggleRecording}
+      disabled={!canStartRecording}
+      className={`${!canStartRecording ? 'opacity-50 cursor-not-allowed' : ''}`}
+      title={!canStartRecording ? "Please wait for the response to finish" : "Start/Stop Recording"}
+    >
+      {isRecording ? 
+        <StopCircle className="w-4 h-4 text-red-500" /> : 
+        <Mic className="w-4 h-4" />
+      }
+    </Button>
+  );
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -1994,7 +2010,7 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
                     title="Stop Speaking"
                   >
                     <StopCircle className="w-4 h-4" />
-                  </Button>
+                </Button>
                 )}
               </div>
             </div>
@@ -2005,19 +2021,3 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     </AnimatePresence>
   );
 }
-
-// Update the Button component for recording
-const RecordButton = () => (
-  <Button 
-    variant="outline" 
-    onClick={toggleRecording}
-    disabled={!canStartRecording}
-    className={`${!canStartRecording ? 'opacity-50 cursor-not-allowed' : ''}`}
-    title={!canStartRecording ? "Please wait for the response to finish" : "Start/Stop Recording"}
-  >
-    {isRecording ? 
-      <StopCircle className="w-4 h-4 text-red-500" /> : 
-      <Mic className="w-4 h-4" />
-    }
-  </Button>
-);
