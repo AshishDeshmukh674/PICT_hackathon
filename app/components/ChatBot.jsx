@@ -346,14 +346,14 @@ function TypingAnimation() {
 const getTimeSlotsForDoctor = (doctorId, forMeeting = false) => {
   if (forMeeting) {
     // Time slots for meetings (from PreviewMeeting.jsx)
-    const doctorTimeSlots = {
+  const doctorTimeSlots = {
       '3': { 
         'Evening Clinic': [[20, 0], [22, 0]] // 8 PM to 10 PM
       },
-      '4': { 
+    '4': { 
         'Evening Clinic': [[20, 0], [22, 0]]
-      },
-      '5': {
+    },
+    '5': {
         'Evening Clinic': [[20, 0], [22, 0]]
       },
       '7': { 
@@ -485,27 +485,27 @@ const getAvailableTimeSlots = async (doctorId, date, clinicType) => {
       currentHour < endHour || 
       (currentHour === endHour && currentMinutes <= endMinutes)
     ) {
-      const slotTime = new Date(date);
-      slotTime.setHours(currentHour, currentMinutes);
+        const slotTime = new Date(date);
+        slotTime.setHours(currentHour, currentMinutes);
 
-      if (isToday && slotTime <= now) {
-        currentMinutes += 15;
+        if (isToday && slotTime <= now) {
+          currentMinutes += 15;
         if (currentMinutes >= 60) {
+            currentHour++;
+            currentMinutes = 0;
+          }
+          continue;
+        }
+
+        const formattedTime = formatTime(slotTime);
+        if (!bookedSlots.includes(formattedTime)) {
+          timeList.push(formattedTime);
+        }
+
+        currentMinutes += 15;
+      if (currentMinutes >= 60) {
           currentHour++;
           currentMinutes = 0;
-        }
-        continue;
-      }
-
-      const formattedTime = formatTime(slotTime);
-      if (!bookedSlots.includes(formattedTime)) {
-        timeList.push(formattedTime);
-      }
-
-      currentMinutes += 15;
-      if (currentMinutes >= 60) {
-        currentHour++;
-        currentMinutes = 0;
       }
     }
 
@@ -622,6 +622,57 @@ export default function ChatBot({ isOpen, onClose }) {
   });
 
   const [currentUser, setCurrentUser] = useState(null);
+
+  // Add new state for space bar tracking
+  const [spaceBarCount, setSpaceBarCount] = useState(0);
+  const [lastSpaceBarTime, setLastSpaceBarTime] = useState(0);
+  const spaceBarTimeThreshold = 500; // 500ms threshold between space presses
+
+  // Add keyboard event listener
+  useEffect(() => {
+    const handleKeyPress = (event) => {
+      // Only handle space bar presses if not typing in an input field
+      if (event.target.tagName !== 'INPUT' && event.target.tagName !== 'TEXTAREA') {
+        if (event.code === 'Space') {
+          const currentTime = Date.now();
+          
+          // Check if this space press is within threshold of last one
+          if (currentTime - lastSpaceBarTime < spaceBarTimeThreshold) {
+            setSpaceBarCount(prev => prev + 1);
+          } else {
+            setSpaceBarCount(1);
+          }
+          
+          setLastSpaceBarTime(currentTime);
+
+          // Handle triple space press
+          if (spaceBarCount === 2) { // Will become 3 with this press
+            event.preventDefault(); // Prevent space from being typed
+            if (isSpeaking) {
+              speechSynthesis.cancel(); // Stop current speech
+              setIsSpeaking(false);
+            } else if (!isRecording) {
+              startVoiceRecognition();
+            }
+            setSpaceBarCount(0);
+          }
+          
+          // Handle double space press
+          if (spaceBarCount === 1) { // Will become 2 with this press
+            if (isSpeaking) {
+              event.preventDefault(); // Prevent space from being typed
+              speechSynthesis.cancel();
+              setIsSpeaking(false);
+              setSpaceBarCount(0);
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [spaceBarCount, lastSpaceBarTime, isSpeaking, isRecording]);
 
   // Add useEffect to handle auth state
   useEffect(() => {
@@ -745,7 +796,7 @@ export default function ChatBot({ isOpen, onClose }) {
       setError("Voice recognition is not supported in your browser.");
       return;
     }
-  
+
     const recognition = new webkitSpeechRecognition();
     recognition.continuous = false;
     recognition.lang = selectedLanguage === "en" ? "en-US" : 
@@ -799,7 +850,7 @@ export default function ChatBot({ isOpen, onClose }) {
           // Don't show error for user-initiated stops
           break;
         default:
-          setError("Voice recognition failed. Please try again.");
+      setError("Voice recognition failed. Please try again.");
       }
       
       setIsRecording(false);
@@ -940,18 +991,18 @@ export default function ChatBot({ isOpen, onClose }) {
           }
         } else {
           // Normal chat flow
-          const response = await fetch("/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
               chatHistory: [...chatHistory, { role: "user", content: input }],
               language: selectedLanguage || "en"
-            }),
-          });
+          }),
+        });
 
-          if (!response.ok) throw new Error("Failed to get response from server");
+        if (!response.ok) throw new Error("Failed to get response from server");
 
-          const data = await response.json();
+        const data = await response.json();
           await speak(data.response);
           setChatHistory(prev => [...prev, { 
             role: "assistant", 
@@ -1081,8 +1132,8 @@ export default function ChatBot({ isOpen, onClose }) {
             console.log('Doctor list:', doctorList);
 
             await speak(doctorPrompt);
-            setChatHistory(prev => [...prev, { role: "assistant", content: doctorPrompt }]);
-            setBookingStep(4);
+          setChatHistory(prev => [...prev, { role: "assistant", content: doctorPrompt }]);
+          setBookingStep(4);
 
           } catch (error) {
             console.error('Doctor list fetch error:', {
@@ -1190,7 +1241,7 @@ export default function ChatBot({ isOpen, onClose }) {
           if (!['1', '2', '3'].includes(clinicChoice)) {
             const errorMsg = messages.invalidClinic;
             await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+              setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
             await speak(messages.chooseClinic);
             break;
           }
@@ -1204,28 +1255,28 @@ export default function ChatBot({ isOpen, onClose }) {
           setClinicType(selectedClinic);
 
           try {
-            const slots = await getAvailableTimeSlots(
-              bookingData.doctorId, 
-              new Date(bookingData.date),
-              selectedClinic
-            );
-            
+          const slots = await getAvailableTimeSlots(
+            bookingData.doctorId, 
+            new Date(bookingData.date), 
+            selectedClinic
+          );
+          
             console.log('Available slots:', slots); // Debug log
             
             if (!slots || slots.length === 0) {
               const noSlotsMsg = messages.noTimeSlots;
               await speak(noSlotsMsg);
-              setChatHistory(prev => [...prev, { role: "assistant", content: noSlotsMsg }]);
+            setChatHistory(prev => [...prev, { role: "assistant", content: noSlotsMsg }]);
               // Show clinic options again
               await speak(messages.chooseClinic);
-              break;
-            }
+            break;
+          }
 
             const slotsPrompt = messages.availableSlots.replace('{slots}', slots.join('\n'));
             await speak(slotsPrompt);
-            setChatHistory(prev => [...prev, { role: "assistant", content: slotsPrompt }]);
-            setAvailableTimeSlots(slots);
-            setBookingStep(7);
+          setChatHistory(prev => [...prev, { role: "assistant", content: slotsPrompt }]);
+          setAvailableTimeSlots(slots);
+          setBookingStep(7);
           } catch (error) {
             console.error('Error getting time slots:', error);
             const errorMsg = messages.processingError;
@@ -1346,14 +1397,53 @@ export default function ChatBot({ isOpen, onClose }) {
     }
   };
 
+  // Modify the startVoiceRecognition function
   const startVoiceRecognition = () => {
-    if (recognitionRef.current && !recognitionRef.current.started) {
+    if (recognitionRef.current) {
       try {
+        // Stop any existing recognition session
+        if (recognitionRef.current.started) {
+          recognitionRef.current.stop();
+        }
+        
+        // Reset the recognition instance
+        recognitionRef.current = new webkitSpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.lang = selectedLanguage === "en" ? "en-US" : 
+                                    selectedLanguage === "hi" ? "hi-IN" : 
+                                    selectedLanguage === "mr" ? "mr-IN" : 
+                                    selectedLanguage === "gu" ? "gu-IN" : "en-US";
+        recognitionRef.current.interimResults = false;
+        recognitionRef.current.maxAlternatives = 1;
+        
+        // Set up event handlers
+        recognitionRef.current.onresult = async (event) => {
+          const transcript = event.results[0][0].transcript;
+          const cleanedInput = cleanInputText(transcript);
+          setUserInput(cleanedInput);
+          await handleUserInput(cleanedInput);
+        };
+
+        recognitionRef.current.onend = () => {
+          setIsRecording(false);
+          recognitionRef.current.started = false;
+        };
+
+        recognitionRef.current.onerror = (event) => {
+          console.error("Speech recognition error:", event.error);
+          setIsRecording(false);
+          recognitionRef.current.started = false;
+        };
+
+        // Start recognition
         recognitionRef.current.start();
+        recognitionRef.current.started = true;
         setIsRecording(true);
+        setError(null);
       } catch (error) {
         console.error("Failed to start recognition:", error);
         setError("Failed to start voice recognition. Please try again.");
+        setIsRecording(false);
       }
     }
   };
@@ -1829,6 +1919,13 @@ export default function ChatBot({ isOpen, onClose }) {
       setMeetingStep(0);
     }
   };
+
+  // Add auto-speak for initial message when chat opens
+  useEffect(() => {
+    if (isOpen && chatHistory.length > 0) {
+      speak(chatHistory[0].content);
+    }
+  }, [isOpen]);
 
   return (
     <AnimatePresence>

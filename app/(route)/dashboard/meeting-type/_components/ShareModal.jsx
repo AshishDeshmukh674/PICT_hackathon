@@ -3,7 +3,7 @@ import { Button } from "../../../../../components/ui/button";
 import { toast } from "sonner";
 
 const ShareModal = ({ event, onClose }) => {
-  const shareText = Join my meeting: ${event.eventName}\nDuration: ${event.duration} minutes;
+  const shareText = `Join my meeting: ${event.eventName}\nDuration: ${event.duration} minutes`;
   const meetingUrl = event.locationUrl;
 
   const handleShare = async (platform) => {
@@ -12,13 +12,13 @@ const ShareModal = ({ event, onClose }) => {
       return;
     }
 
-    const fullShareText = ${shareText}\n\nMeeting Link: ${meetingUrl};
+    const fullShareText = `${shareText}\n\nMeeting Link: ${meetingUrl}`;
 
     try {
       switch (platform) {
         case "whatsapp":
           window.open(
-            https://wa.me/?text=${encodeURIComponent(fullShareText)},
+            `https://wa.me/?text=${encodeURIComponent(fullShareText)}`,
             "_blank"
           );
           break;
