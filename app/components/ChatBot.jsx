@@ -14,6 +14,7 @@ import { getFirestore, doc, setDoc, collection, query, where, getDocs } from 'fi
 import { app, auth } from '../config/FirebaseConfig';
 import { onAuthStateChanged } from "firebase/auth";
 import { useSpacebarHandler } from '../hooks/useSpacebarHandler';
+import { toast } from 'react-toastify';
 
 const LANGUAGE_OPTIONS = {
   en: "English",
@@ -626,6 +627,9 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
   const [canStartRecording, setCanStartRecording] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
 
+  // Add this state to track voice input
+  const [voiceInput, setVoiceInput] = useState("");
+
   // Add useEffect to handle auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -775,6 +779,9 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
       const transcript = event.results[0][0].transcript;
       const cleanedInput = cleanInputText(transcript);
       setUserInput(cleanedInput);
+      
+      // Add voice input to chat history immediately
+      setChatHistory(prev => [...prev, { role: "user", content: cleanedInput }]);
       
       try {
         if (bookingStep > 0) {
@@ -1371,16 +1378,54 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     }
   };
 
-  const toggleRecording = () => {
-    if (isRecording) {
-      if (recognitionRef.current?.started) {
+  const handleRecognitionError = (error) => {
+    console.error("Recognition error:", error);
+    setIsRecording(false);
+    setCanStartRecording(true);
+    setError("Voice recognition failed. Please try again.");
+    
+    // Reset recognition after error
+    if (recognitionRef.current) {
+      try {
         recognitionRef.current.stop();
+      } catch (e) {
+        console.error("Error stopping recognition:", e);
       }
-      setIsRecording(false);
-    } else {
-      startVoiceRecognition();
     }
   };
+
+  const toggleRecording = () => {
+    try {
+      if (isRecording) {
+        if (recognitionRef.current?.started) {
+          recognitionRef.current.stop();
+        }
+        setIsRecording(false);
+      } else {
+        if (!canStartRecording) {
+          toast.error("Please wait for the current response to finish");
+          return;
+        }
+        startVoiceRecognition();
+      }
+    } catch (error) {
+      handleRecognitionError(error);
+    }
+  };
+
+  // Add recovery mechanism for recognition
+  useEffect(() => {
+    if (!isRecording && canStartRecording) {
+      // Reset recognition instance
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {
+          console.error("Error aborting recognition:", e);
+        }
+      }
+    }
+  }, [isRecording, canStartRecording]);
 
   const handleExtractedText = async (text) => {
     if (!text.trim()) return;
@@ -1941,12 +1986,7 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
                 <Button onClick={() => handleUserInput(userInput)}>
                   <Send className="w-4 h-4" />
                 </Button>
-                <Button variant="outline" onClick={toggleRecording}>
-                  {isRecording ? 
-                    <StopCircle className="w-4 h-4 text-red-500" /> : 
-                    <Mic className="w-4 h-4" />
-                  }
-                </Button>
+                <RecordButton />
                 {isSpeaking && (
                   <Button 
                     variant="destructive" 
@@ -1965,3 +2005,19 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     </AnimatePresence>
   );
 }
+
+// Update the Button component for recording
+const RecordButton = () => (
+  <Button 
+    variant="outline" 
+    onClick={toggleRecording}
+    disabled={!canStartRecording}
+    className={`${!canStartRecording ? 'opacity-50 cursor-not-allowed' : ''}`}
+    title={!canStartRecording ? "Please wait for the response to finish" : "Start/Stop Recording"}
+  >
+    {isRecording ? 
+      <StopCircle className="w-4 h-4 text-red-500" /> : 
+      <Mic className="w-4 h-4" />
+    }
+  </Button>
+);
