@@ -49,9 +49,10 @@ function validateInput(body) {
   if (!body.chatHistory || !Array.isArray(body.chatHistory)) {
     throw new Error("Invalid chat history format");
   }
-  
+
   if (!body.language || !SUPPORTED_LANGUAGES[body.language]) {
-    throw new Error(`Unsupported language. Supported languages are: ${Object.keys(SUPPORTED_LANGUAGES).join(", ")}`);
+    body.language='en'
+    // throw new Error(`Unsupported language. Supported languages are: ${Object.keys(SUPPORTED_LANGUAGES).join(", ")}`);
   }
   
   return true;
