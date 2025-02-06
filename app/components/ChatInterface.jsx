@@ -1,10 +1,13 @@
 "use client"
 import { useState, useEffect, useRef } from 'react';
+import { Button } from '../../components/ui/button';
+import { Textarea } from '../../components/ui/textarea';
+import { Send } from 'lucide-react';
 
-const ChatInterface = ({ formData }) => {
+const ChatInterface = ({ formData, onDietPlanUpdate }) => {
     const [messages, setMessages] = useState([]);
-    const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
+    const [userInput, setUserInput] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
     const messagesEndRef = useRef(null);
 
@@ -85,15 +88,11 @@ Please provide the response in exactly this format, maintaining the same structu
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!input.trim()) return;
+        if (!userInput.trim()) return;
 
-        const userMessage = {
-            role: 'user',
-            content: input
-        };
-
+        const userMessage = { role: 'user', content: userInput };
         setMessages(prev => [...prev, userMessage]);
-        setInput('');
+        setUserInput('');
         setIsLoading(true);
 
         try {
@@ -103,23 +102,28 @@ Please provide the response in exactly this format, maintaining the same structu
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    message: input,
-                    formData: formData,
-                    chatHistory: messages
+                    messages: [...messages, userMessage],
+                    formData
                 }),
             });
 
+            if (!response.ok) throw new Error('Failed to get response');
+
             const data = await response.json();
-            
-            setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: data.response + "\n\nIs there anything else you'd like to know?"
-            }]);
+            const assistantMessage = { role: 'assistant', content: data.response };
+            setMessages(prev => [...prev, assistantMessage]);
+
+            // Check if the response contains a diet plan
+            if (data.response.includes('Here is your personalized diet plan') || 
+                data.response.includes('Your recommended diet plan')) {
+                onDietPlanUpdate(data.response);
+            }
+
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Chat error:', error);
             setMessages(prev => [...prev, {
                 role: 'assistant',
-                content: "I'm sorry, I encountered an error. Please try again."
+                content: 'Sorry, there was an error processing your request. Please try again.'
             }]);
         } finally {
             setIsLoading(false);
@@ -202,20 +206,21 @@ Please provide the response in exactly this format, maintaining the same structu
                     </button>
                 </div>
                 <form onSubmit={handleSubmit} className="flex space-x-4">
-                    <input
-                        type="text"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
+                    <Textarea
+                        value={userInput}
+                        onChange={(e) => setUserInput(e.target.value)}
                         placeholder="Ask about your diet plan..."
                         className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSubmit(e);
+                            }
+                        }}
                     />
-                    <button
-                        type="submit"
-                        disabled={isLoading}
-                        className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-blue-300"
-                    >
-                        Send
-                    </button>
+                    <Button type="submit" disabled={isLoading}>
+                        <Send className="w-4 h-4" />
+                    </Button>
                 </form>
             </div>
         </div>

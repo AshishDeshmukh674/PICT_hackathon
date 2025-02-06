@@ -861,6 +861,33 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     };
   }, [bookingStep, cancelStep, meetingStep, selectedLanguage]);
 
+  // Add this helper function near other utility functions
+  const repeatLastPrompt = async (step, messages, data = {}) => {
+    const prompts = {
+      booking: {
+        1: messages.provideName,
+        2: messages.provideEmail,
+        3: messages.providePhone,
+        4: messages.chooseDoctorPrompt.replace('{doctorList}', 
+          data.doctors?.map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name}`).join('\n')),
+        5: messages.provideDate,
+        6: messages.chooseClinic,
+        7: messages.availableSlots.replace('{slots}', data.slots?.join('\n'))
+      },
+      meeting: {
+        1: messages.provideMeetingEmail,
+        2: messages.chooseDoctorPrompt.replace('{doctorList}', 
+          data.doctors?.map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name}`).join('\n')),
+        3: "Please provide a name for your meeting (e.g., 'Follow-up Consultation')",
+        4: "Please provide the meeting date in DD/MM/YYYY format",
+        5: `Available time slots are: ${data.slots?.join(', ')}. Please choose a time slot.`
+      }
+    };
+
+    return prompts;
+  };
+
+  // Update the handleUserInput function to add retry logic
   const handleUserInput = async (input) => {
     if (!input.trim()) return;
     
@@ -883,15 +910,14 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
       } else if (meetingStep > 0) {
         await handleMeetingFlow(input);
       } else {
-        // Check for symptoms
+        // Extract symptoms before processing general input
         const symptoms = extractSymptoms(input, selectedLanguage);
         if (symptoms) {
-          // Store symptoms in localStorage for use during appointment booking
           localStorage.setItem('currentSymptoms', symptoms);
           console.log('Symptoms stored:', symptoms);
         }
 
-        // Check if we should start booking flow
+        // Check for booking intent
         if (input.toLowerCase().includes("book") || 
             input.toLowerCase().includes("appointment") || 
             input.toLowerCase().includes("अपॉइंटमेंट") || 
@@ -907,94 +933,72 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
                    input.toLowerCase().includes("meeting") || 
                    input.toLowerCase().includes("zoom") || 
                    input.toLowerCase().includes("online")) {
+          // Handle meeting scheduling intent
+          await handleMeetingIntent();
+        } else {
+          // Handle general chat flow with enhanced error handling
           try {
-            // Fetch doctor list with retry mechanism
-            let retryCount = 0;
-            let doctorsResponse = null;
+            const response = await fetch("/api/chat", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ 
+                chatHistory: [...chatHistory, { role: "user", content: input }],
+                language: selectedLanguage || "en"
+              }),
+            });
+
+            if (!response.ok) throw new Error("Failed to get response from server");
+
+            const data = await response.json();
             
-            while (retryCount < 3) {
-              try {
-                doctorsResponse = await GlobalApi.getDoctorList();
-                if (isValidDoctorResponse(doctorsResponse)) {
-                  break;
-                }
-                retryCount++;
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
-              } catch (err) {
-                console.error(`Attempt ${retryCount + 1} failed:`, err);
-                retryCount++;
-                if (retryCount === 3) throw err;
-                await new Promise(resolve => setTimeout(resolve, 1000));
-              }
-            }
-
-            if (!isValidDoctorResponse(doctorsResponse)) {
-              throw new Error('Invalid doctor list response');
-            }
-
-            const doctors = doctorsResponse.data.data;
-            setAvailableDoctors(doctors);
-
-            // Create doctor list string
-            const doctorList = doctors
-              .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name} (${doc.attributes.Profession})`)
-              .join('\n');
-
-            const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
-            const doctorPrompt = messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
+            // Reset states before speaking to ensure clean state
+            setError(null);
+            setCanStartRecording(true);
+            setIsRecording(false);
             
-            setMeetingStep(1);
-            await speak(doctorPrompt);
+            await speak(data.response);
             setChatHistory(prev => [...prev, { 
               role: "assistant", 
-              content: doctorPrompt 
+              content: data.response 
             }]);
+
+            // Check for doctor type in response
+            const llmResponse = data.response;
+            const doctorType = extractDoctorType(llmResponse);
+            if(doctorType) {
+              try {
+                const doctorlist_ = await GlobalApi.getDoctorByCategory(doctorType);
+                await speak(doctorlist_);
+                setChatHistory(prev => [...prev, { 
+                  role: "assistant", 
+                  content: doctorlist_   
+                }]);
+              } catch (error) {
+                console.error("Error getting doctor list:", error);
+                const errorMsg = "Sorry, there was an error processing your request.";
+                await speak(errorMsg);
+                setChatHistory(prev => [...prev, { 
+                  role: "assistant", 
+                  content: errorMsg 
+                }]);
+              }
+            }
+            
+            // Ensure states are reset after all processing
+            setCanStartRecording(true);
+            setIsRecording(false);
+            
           } catch (error) {
-            console.error('Doctor list fetch error:', error);
-            const errorMsg = "There was a problem fetching the doctor list. Please try again in a moment.";
+            console.error("Error in chat flow:", error);
+            const errorMsg = "Sorry, there was an error processing your request. Please try again.";
             await speak(errorMsg);
             setChatHistory(prev => [...prev, { 
               role: "assistant", 
               content: errorMsg 
             }]);
+            setCanStartRecording(true);
+            setIsRecording(false);
           }
-        } else {
-          // Normal chat flow
-        const response = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-              chatHistory: [...chatHistory, { role: "user", content: input }],
-              language: selectedLanguage || "en"
-          }),
-        });
-
-        if (!response.ok) throw new Error("Failed to get response from server");
-
-        const data = await response.json();
-          await speak(data.response);
-          setChatHistory(prev => [...prev, { 
-            role: "assistant", 
-            content: data.response
-          }]);
-          const llmResponse =data.response;
-          const doctorType = extractDoctorType(llmResponse);
-          console.log(doctorType);
-          if(doctorType){
-            try{doctorlist_ = await GlobalApi.getDoctorByCategory(doctorType);
-            await speak(doctorlist)
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: doctorlist   
-            }]);}
-            catch (error) {
-              console.error("Error getting doctor list:", error);
-              await speak("Sorry, there was an error processing your request.");
-              setChatHistory(prev => [...prev, { role: "assistant", content: "Sorry, there was an error processing your request." }]);
-            } 
-          }
-
-
         }
       }
     } catch (error) {
@@ -1002,9 +1006,13 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
       const errorMsg = "Sorry, there was an error processing your request.";
       await speak(errorMsg);
       setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+      setCanStartRecording(true);
+      setIsRecording(false);
     } finally {
       setIsLoading(false);
       setUserInput("");
+      setCanStartRecording(true);
+      setIsRecording(false);
     }
   };
 
@@ -1367,13 +1375,31 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
   };
 
   const startVoiceRecognition = () => {
-    if (recognitionRef.current && !recognitionRef.current.started) {
+    if (recognitionRef.current && !recognitionRef.current.started && canStartRecording && !isSpeaking) {
       try {
+        // Reset any ongoing recognition
+        if (recognitionRef.current.started) {
+          recognitionRef.current.stop();
+        }
+        
+        // Clear previous states
+        setError(null);
+        setIsRecording(false);
+        
+        // Start new recognition
         recognitionRef.current.start();
         setIsRecording(true);
+        
+        // Add visual feedback
+        setChatHistory(prev => [...prev, { 
+          role: "assistant", 
+          content: "Listening... Please speak now." 
+        }]);
       } catch (error) {
         console.error("Failed to start recognition:", error);
         setError("Failed to start voice recognition. Please try again.");
+        setCanStartRecording(true);
+        setIsRecording(false);
       }
     }
   };
@@ -1833,19 +1859,95 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     }
   };
 
+  // Add handleMeetingIntent function
+  const handleMeetingIntent = async () => {
+    try {
+      // Fetch doctor list with retry mechanism
+      let retryCount = 0;
+      let doctorsResponse = null;
+      
+      while (retryCount < 3) {
+        try {
+          doctorsResponse = await GlobalApi.getDoctorList();
+          if (isValidDoctorResponse(doctorsResponse)) {
+            break;
+          }
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+        } catch (err) {
+          console.error(`Attempt ${retryCount + 1} failed:`, err);
+          retryCount++;
+          if (retryCount === 3) throw err;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      if (!isValidDoctorResponse(doctorsResponse)) {
+        throw new Error('Invalid doctor list response');
+      }
+
+      const doctors = doctorsResponse.data.data;
+      setAvailableDoctors(doctors);
+
+      // Create doctor list string
+      const doctorList = doctors
+        .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name} (${doc.attributes.Profession})`)
+        .join('\n');
+
+      const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
+      const doctorPrompt = messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
+      
+      setMeetingStep(1);
+      await speak(doctorPrompt);
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: doctorPrompt 
+      }]);
+    } catch (error) {
+      console.error('Doctor list fetch error:', error);
+      const errorMsg = "There was a problem fetching the doctor list. Please try again in a moment.";
+      await speak(errorMsg);
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: errorMsg 
+      }]);
+      setCanStartRecording(true); // Ensure recording can continue after error
+    }
+  };
+
+  // Update the handleTripleSpacebar function
   const handleTripleSpacebar = () => {
     if (!isOpen) {
       onOpen();
       // Start initial read-aloud
       speak(TRANSLATIONS[selectedLanguage].welcome);
     } else {
-      // Start recording if not already recording
-      if (!isRecording && canStartRecording) {
-        startVoiceRecognition();
+      // Cancel any ongoing speech
+      if (isSpeaking) {
+        speechSynthesis.cancel();
+        setIsSpeaking(false);
       }
+      
+      // Reset states and start recording
+      setError(null);
+      setCanStartRecording(true);
+      setIsRecording(false);
+      
+      // Small delay to ensure states are reset
+      setTimeout(() => {
+        if (!isRecording && canStartRecording && !isSpeaking) {
+          startVoiceRecognition();
+        } else if (isRecording) {
+          if (recognitionRef.current?.started) {
+            recognitionRef.current.stop();
+          }
+          setIsRecording(false);
+        }
+      }, 100);
     }
   };
 
+  // Add back the handleDoubleSpacebar function
   const handleDoubleSpacebar = () => {
     if (isSpeaking) {
       speechSynthesis.cancel();
@@ -1854,11 +1956,27 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     }
   };
 
-  // Add the spacebar hook
+  // Add a new function to handle recognition restart
+  const restartRecognitionIfNeeded = () => {
+    if (canStartRecording && !isRecording && !isSpeaking && recognitionRef.current) {
+      try {
+        recognitionRef.current.start();
+        setIsRecording(true);
+        setError(null);
+      } catch (error) {
+        console.error("Failed to restart recognition:", error);
+        setCanStartRecording(true);
+      }
+    }
+  };
+
+  // Update the useSpacebarHandler hook usage
   useSpacebarHandler({
     onTriplePress: handleTripleSpacebar,
     onDoublePress: handleDoubleSpacebar,
     isOpen,
+    isTyping,
+    canStartRecording,
     isSpeaking
   });
 
@@ -1966,18 +2084,3 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     </AnimatePresence>
   );
 }
-// Update the Button component for recording
-const RecordButton = () => (
-  <Button 
-    variant="outline" 
-    onClick={toggleRecording}
-    disabled={!canStartRecording}
-    className={`${!canStartRecording ? 'opacity-50 cursor-not-allowed' : ''}`}
-    title={!canStartRecording ? "Please wait for the response to finish" : "Start/Stop Recording"}
-  >
-    {isRecording ? 
-      <StopCircle className="w-4 h-4 text-red-500" /> : 
-      <Mic className="w-4 h-4" />
-    }
-  </Button>
-);

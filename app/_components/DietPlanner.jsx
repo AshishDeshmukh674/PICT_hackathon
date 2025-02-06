@@ -1,18 +1,68 @@
 "use client"
 import { useState, useEffect } from 'react';
 import ChatInterface from '../components/ChatInterface';
+import { Button } from '../../components/ui/button';
+import { Download } from 'lucide-react';
+import { toast } from 'react-toastify';
 
 const DietPlanner = () => {
     // State Management
     const [uiState, setUIState] = useState({
         isFormSubmitted: false,
         formData: null,
-        iframeHeight: "800px"
+        iframeHeight: "800px",
+        dietPlan: null,
+        isGeneratingPDF: false
     });
 
     // Constants
     const JOTFORM_ID = "250282260962455";
     const JOTFORM_SCRIPT_URL = "https://cdn.jotfor.ms/js/vendor/imageinfo.js";
+
+    // Handle PDF Download
+    const handleDownloadPDF = async () => {
+        if (!uiState.dietPlan) {
+            toast.error("No diet plan available to download");
+            return;
+        }
+
+        try {
+            setUIState(prev => ({ ...prev, isGeneratingPDF: true }));
+
+            const response = await fetch('/api/generate-diet-pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    dietPlan: uiState.dietPlan,
+                    userInfo: uiState.formData
+                }),
+            });
+
+            if (!response.ok) throw new Error('Failed to generate PDF');
+
+            // Create blob from response
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            
+            // Create temporary link and trigger download
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'diet-plan.pdf';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+            toast.success("PDF downloaded successfully!");
+        } catch (error) {
+            console.error('PDF download error:', error);
+            toast.error("Failed to download PDF. Please try again.");
+        } finally {
+            setUIState(prev => ({ ...prev, isGeneratingPDF: false }));
+        }
+    };
 
     // Handle incoming messages from JotForm
     const handleJotFormMessage = (event) => {
@@ -87,12 +137,29 @@ const DietPlanner = () => {
         return () => window.removeEventListener('message', handleJotFormMessage);
     }, []);
 
+    // Handle diet plan updates from ChatInterface
+    const handleDietPlanUpdate = (plan) => {
+        setUIState(prev => ({ ...prev, dietPlan: plan }));
+    };
+
     return (
         <div className="min-h-screen p-6 bg-gray-100">
             <div className="max-w-4xl mx-auto">
-                <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">
-                    {uiState.isFormSubmitted ? 'Your AI Diet Assistant' : 'Diet Planner'}
-                </h1>
+                <div className="flex justify-between items-center mb-8">
+                    <h1 className="text-3xl font-bold text-gray-800">
+                        {uiState.isFormSubmitted ? 'Your AI Diet Assistant' : 'Diet Planner'}
+                    </h1>
+                    {uiState.isFormSubmitted && uiState.dietPlan && (
+                        <Button
+                            onClick={handleDownloadPDF}
+                            disabled={uiState.isGeneratingPDF}
+                            className="flex items-center gap-2"
+                        >
+                            <Download className="w-4 h-4" />
+                            {uiState.isGeneratingPDF ? 'Generating PDF...' : 'Download Diet Plan'}
+                        </Button>
+                    )}
+                </div>
                 
                 {!uiState.isFormSubmitted ? (
                     <div className="bg-white rounded-lg shadow-md p-6">
@@ -120,7 +187,10 @@ const DietPlanner = () => {
                         <p className="text-center text-gray-600 mb-4">
                             Form submitted successfully! Starting your AI diet consultation...
                         </p>
-                        <ChatInterface formData={uiState.formData} />
+                        <ChatInterface 
+                            formData={uiState.formData} 
+                            onDietPlanUpdate={handleDietPlanUpdate}
+                        />
                     </div>
                 )}
             </div>
