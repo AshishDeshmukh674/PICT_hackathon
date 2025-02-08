@@ -1,0 +1,53 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: ["demo_1"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
+
+      - name: Login Dockerhub
+        env:
+          DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME}}
+          DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
+        run: docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+
+      - name: Set Up Environment Variables
+        run: |
+          echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY}}" >> .env
+          echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY}}" >> .env
+          echo "KINDE_CLIENT_ID=${{ secrets.KINDE_CLIENT_ID}}" >> .env
+          echo "KINDE_CLIENT_SECRET=${{ secrets.KINDE_CLIENT_SECRET}}" >> .env
+          echo "KINDE_ISSUER_URL=${{ secrets.KINDE_ISSUER_URL}}" >> .env
+          echo "KINDE_SITE_URL=${{ secrets.KINDE_SITE_URL}}" >> .env
+          echo "KINDE_POST_LOGOUT_REDIRECT_URL=${{ secrets.KINDE_POST_LOGOUT_REDIRECT_URL}}" >> .env
+          echo "KINDE_POST_LOGIN_REDIRECT_URL=${{ secrets.KINDE_POST_LOGIN_REDIRECT_URL}}" >> .env
+          echo "NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY}}" >> .env
+          echo "NEXT_PUBLIC_BASE_URL=${{ secrets.NEXT_PUBLIC_BASE_URL}}" >> .env
+          echo "NEXT_PUBLIC_ZOOM_REDIRECT_URI=${{ secrets.NEXT_PUBLIC_ZOOM_REDIRECT_URI}}" >> .env
+          echo "NEXT_PUBLIC_ZOOM_CLIENT_ID=${{ secrets.NEXT_PUBLIC_ZOOM_CLIENT_ID}}" >> .env
+          echo "NEXT_PUBLIC_ZOOM_CLIENT_SECRET=${{ secrets.NEXT_PUBLIC_ZOOM_CLIENT_SECRET}}" >> .env
+          echo "NEXT_PUBLIC_ZOOM_ACCOUNT_ID=${{ secrets.NEXT_PUBLIC_ZOOM_ACCOUNT_ID}}" >> .env
+          echo "TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID}}" >> .env
+          echo "TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN}}" >> .env
+          echo "TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER}}" >> .env
+          echo "NEXT_PUBLIC_STRAPI_API_KEY=${{ secrets.NEXT_PUBLIC_STRAPI_API_KEY}}" >> .env
+          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN}}" >> .env
+
+      - name: Build the Docker image
+        run: |
+          docker-compose -f docker-compose_live_ci.yml build
+          docker tag pict_backend_live nishchaybhardwaj/pict_backend_live:latest
+
+      - name: Push to Dockerhub
+        run: docker push nishchaybhardwaj/pict_backend_live:latest

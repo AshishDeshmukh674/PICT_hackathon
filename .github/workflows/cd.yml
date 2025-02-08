@@ -1,0 +1,43 @@
+# name: CD Pipeline
+
+# on:
+#   workflow_run:
+#     workflows: ["CI Pipeline"]
+#     types:
+#       - completed
+    
+# jobs:
+
+#   build:
+
+#     runs-on: self-hosted
+
+#     steps:
+
+#     - name: Install Docker Compose
+#       run: |
+#         sudo apt-get install -y docker-compose || true
+
+#     - name: Login Dockerhub
+#       env:
+#         DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME}}
+#         DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
+#       run: sudo docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+
+#     - name: Stop and Remove Old deshore_backend_live Container
+#       run: |
+#         sudo docker stop deshore_backend_live || true
+#         sudo docker rm deshore_backend_live || true
+
+#     - name: Remove Dangling Docker Images 
+#       run: sudo docker image prune -f
+
+#     - name: Remove Main Docker Image
+#       run: sudo docker rmi kashif08/deshore_backend_live:latest || true
+
+#     - name: Pull the Docker image from Dockerhub
+#       run: sudo docker pull kashif08/deshore_backend_live:latest
+
+#     - name: Start New deshore_backend_live Container
+#       run: |
+#         sudo docker run -d --name deshore_backend_live -p 8081:5000 --restart unless-stopped kashif08/deshore_backend_live:latest
