@@ -6,9 +6,11 @@ on:
     types:
       - completed
     branches:
+      - demo_pipeline  # Ensures CD runs only for this branch
+
+  push:  # Fallback to trigger CD on direct push (if needed)
+    branches:
       - demo_pipeline
-    status:
-      - success  # Ensures CD runs only if CI succeeds
 
 jobs:
   deploy:
