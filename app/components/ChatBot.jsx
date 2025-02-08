@@ -630,14 +630,6 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
   // Add this state to track voice input
   const [voiceInput, setVoiceInput] = useState("");
 
-  // Add these state variables at the top
-  const [speechQueue, setSpeechQueue] = useState([]);
-  const speechSynthesisRef = useRef(null);
-
-  // Add these state variables at the top of the ChatBot component
-  const [recognitionError, setRecognitionError] = useState(false);
-  const recognitionRetryCount = useRef(0);
-
   // Add useEffect to handle auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -661,60 +653,84 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     });
   };
 
-  // Add this function to handle speech synthesis
-  const speak = (text) => {
-    try {
-      if (!text) return;
-      
-      // Cancel any ongoing speech
-      if (speechSynthesis.speaking) {
-        speechSynthesis.cancel();
-      }
+  const speak = async (text) => {
+    if ("speechSynthesis" in window) {
+      try {
+        if (speechSynthesis.speaking) {
+          speechSynthesis.cancel();
+        }
+  
+        const voices = await forceLoadVoices();
+        const utterance = new SpeechSynthesisUtterance(text);
+        
+        // Force Hindi voice for Marathi and Gujarati
+        const langConfig = ['mr', 'gu'].includes(selectedLanguage) ? 
+          languageConfig.hi : 
+          languageConfig[selectedLanguage] || languageConfig.en;
+  
+        utterance.lang = langConfig.lang;
+        
+        // Find the best matching voice
+        let selectedVoice = null;
+  
+        // First try preferred voices
+        for (const preferredVoice of langConfig.preferredVoices) {
+          selectedVoice = voices.find(voice => 
+            voice.name.includes(preferredVoice) || 
+            voice.voiceURI.includes(preferredVoice)
+          );
+          if (selectedVoice) break;
+        }
+  
+        // Then try language fallbacks
+        if (!selectedVoice) {
+          for (const fallbackLang of langConfig.fallbackLangs) {
+            selectedVoice = voices.find(voice => 
+              voice.lang.startsWith(fallbackLang)
+            );
+            if (selectedVoice) break;
+          }
+        }
+  
+        // Final fallback to any available voice
+        if (!selectedVoice) {
+          selectedVoice = voices[0];
+        }
+  
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
+          console.log(`Using voice: ${selectedVoice.name} (${selectedVoice.lang})`);
+        }
+  
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      const config = VOICE_CONFIG[selectedLanguage];
-      
-      utterance.lang = config.lang;
-      utterance.onstart = () => {
-        setIsSpeaking(true);
-        setCanStartRecording(false);
-      };
+        utterance.rate = selectedLanguage === 'en' ? 1 : 0.9;
+        utterance.pitch = 1;
+        utterance.volume = 1;
 
-      utterance.onend = () => {
+        utterance.onstart = () => {
+          setIsSpeaking(true);
+          setCanStartRecording(false); // Disable recording while speaking
+        };
+        
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          setCanStartRecording(true); // Re-enable recording after speaking
+        };
+        
+        utterance.onerror = (event) => {
+          console.error('Speech synthesis error:', event);
+          setIsSpeaking(false);
+          setCanStartRecording(true); // Re-enable recording on error
+        };
+
+        speechSynthesis.speak(utterance);
+      } catch (error) {
+        console.error('Error in speak function:', error);
         setIsSpeaking(false);
         setCanStartRecording(true);
-      };
-
-      utterance.onerror = (event) => {
-        console.error('Speech synthesis error:', event);
-        setIsSpeaking(false);
-        setCanStartRecording(true);
-      };
-
-      // Get available voices
-      const voices = speechSynthesis.getVoices();
-      const preferredVoice = voices.find(voice => voice.name === config.voiceName);
-      if (preferredVoice) {
-        utterance.voice = preferredVoice;
       }
-
-      speechSynthesis.speak(utterance);
-      speechSynthesisRef.current = utterance;
-    } catch (error) {
-      console.error('Speech synthesis error:', error);
-      setIsSpeaking(false);
-      setCanStartRecording(true);
     }
   };
-
-  // Add cleanup effect
-  useEffect(() => {
-    return () => {
-      if (speechSynthesis.speaking) {
-        speechSynthesis.cancel();
-      }
-    };
-  }, []);
 
   useEffect(() => {
     const loadAndLogVoices = async () => {
@@ -737,99 +753,6 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     return () => {
       if (speechSynthesis.speaking) {
         speechSynthesis.cancel();
-      }
-    };
-  }, []);
-
-  // Add this function to properly reset the recognition instance
-  const resetRecognition = () => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-        recognitionRef.current = null;
-      } catch (error) {
-        console.error('Error resetting recognition:', error);
-      }
-    }
-    
-    if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
-      const recognition = new webkitSpeechRecognition();
-      recognition.continuous = false;
-      recognition.lang = languageConfig[selectedLanguage].lang;
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-      
-      recognition.onstart = () => {
-        setIsRecording(true);
-        setRecognitionError(false);
-        recognition.started = true;
-      };
-      
-      recognition.onend = () => {
-        recognition.started = false;
-        setIsRecording(false);
-        
-        if (!recognitionError && canStartRecording) {
-          if (recognitionRetryCount.current < 3) {
-            recognitionRetryCount.current++;
-            startVoiceRecognition();
-          }
-        }
-      };
-
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setUserInput(transcript);
-        handleUserInput(transcript);
-      };
-
-      recognition.onerror = (event) => {
-        console.error('Recognition error:', event.error);
-        setRecognitionError(true);
-        setIsRecording(false);
-        setCanStartRecording(true);
-        toast.error('Voice recognition error. Please try again.');
-      };
-      
-      recognitionRef.current = recognition;
-    }
-  };
-
-  // Update the startVoiceRecognition function
-  const startVoiceRecognition = async () => {
-    try {
-      if (!recognitionRef.current) {
-        resetRecognition();
-      }
-      
-      if (recognitionRef.current?.started) {
-        recognitionRef.current.stop();
-      }
-      
-      await recognitionRef.current.start();
-      recognitionRetryCount.current = 0;
-      setCanStartRecording(false);
-      setIsRecording(true);
-      
-    } catch (error) {
-      console.error('Failed to start recognition:', error);
-      setRecognitionError(true);
-      setIsRecording(false);
-      setCanStartRecording(true);
-      resetRecognition(); // Add this line to reset on error
-      toast.error('Failed to start voice recognition. Please try again.');
-    }
-  };
-
-  // Add cleanup in useEffect
-  useEffect(() => {
-    return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch (error) {
-          console.error('Error cleaning up recognition:', error);
-        }
       }
     };
   }, []);
@@ -1451,6 +1374,36 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     }
   };
 
+  const startVoiceRecognition = () => {
+    if (recognitionRef.current && !recognitionRef.current.started && canStartRecording && !isSpeaking) {
+      try {
+        // Reset any ongoing recognition
+        if (recognitionRef.current.started) {
+          recognitionRef.current.stop();
+        }
+        
+        // Clear previous states
+        setError(null);
+        setIsRecording(false);
+        
+        // Start new recognition
+        recognitionRef.current.start();
+        setIsRecording(true);
+        
+        // Add visual feedback
+        setChatHistory(prev => [...prev, { 
+          role: "assistant", 
+          content: "Listening... Please speak now." 
+        }]);
+      } catch (error) {
+        console.error("Failed to start recognition:", error);
+        setError("Failed to start voice recognition. Please try again.");
+        setCanStartRecording(true);
+        setIsRecording(false);
+      }
+    }
+  };
+
   const handleRecognitionError = (error) => {
     console.error("Recognition error:", error);
     setIsRecording(false);
@@ -1468,15 +1421,21 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
   };
 
   const toggleRecording = () => {
+    try {
     if (isRecording) {
-      if (recognitionRef.current?.started) {
-        recognitionRef.current.stop();
+        if (recognitionRef.current?.started) {
+          recognitionRef.current.stop();
+        }
+        setIsRecording(false);
+    } else {
+        if (!canStartRecording) {
+          toast.error("Please wait for the current response to finish");
+          return;
+        }
+        startVoiceRecognition();
       }
-      setIsRecording(false);
-      setCanStartRecording(true); // Add this line
-      resetRecognition(); // Add this line
-    } else if (canStartRecording && !isSpeaking) {
-      startVoiceRecognition();
+    } catch (error) {
+      handleRecognitionError(error);
     }
   };
 
@@ -1960,17 +1919,31 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
   const handleTripleSpacebar = () => {
     if (!isOpen) {
       onOpen();
-      setTimeout(() => {
-        speak(TRANSLATIONS[selectedLanguage].welcome);
-      }, 300);
+      // Start initial read-aloud
+      speak(TRANSLATIONS[selectedLanguage].welcome);
     } else {
+      // Cancel any ongoing speech
       if (isSpeaking) {
         speechSynthesis.cancel();
         setIsSpeaking(false);
-        setCanStartRecording(true);
       }
       
-      toggleRecording(); // Use toggleRecording instead of direct manipulation
+      // Reset states and start recording
+      setError(null);
+      setCanStartRecording(true);
+      setIsRecording(false);
+      
+      // Small delay to ensure states are reset
+      setTimeout(() => {
+        if (!isRecording && canStartRecording && !isSpeaking) {
+          startVoiceRecognition();
+        } else if (isRecording) {
+          if (recognitionRef.current?.started) {
+            recognitionRef.current.stop();
+          }
+          setIsRecording(false);
+        }
+      }, 100);
     }
   };
 
@@ -2022,36 +1995,6 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
       }
     </Button>
   );
-
-  // Update the useEffect for cleanup
-  useEffect(() => {
-    if (!isOpen) {
-      // Clean up when chatbot is closed
-      if (speechSynthesis.speaking) {
-        speechSynthesis.cancel();
-      }
-      if (recognitionRef.current?.started) {
-        recognitionRef.current.stop();
-      }
-      setIsRecording(false);
-      setIsSpeaking(false);
-      setCanStartRecording(true);
-      setError(null);
-      setChatHistory([{ role: "assistant", content: TRANSLATIONS[selectedLanguage].welcome }]);
-    }
-  }, [isOpen, selectedLanguage]);
-
-  useEffect(() => {
-    if (recognitionError) {
-      const timer = setTimeout(() => {
-        setRecognitionError(false);
-        setCanStartRecording(true);
-        resetRecognition();
-      }, 1000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [recognitionError]);
 
   return (
     <AnimatePresence>
