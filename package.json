@@ -2,10 +2,12 @@
   "name": "doctor-website",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "startbot": "node --experimental-json-modules app/telebot/index.js",
     "lint": "next lint",
     "export": "next export"
   },
