@@ -13,44 +13,28 @@ const axiosClient = axios.create({
 const getCategory = () => axiosClient.get('categories?populate=*');
 
 // Fetch all doctors with their relationships populated
-const getDoctorList = () => axiosClient.get('doctors?populate=*');
+const getDoctorList = () => axiosClient.get('/doctors?populate=*');
 
 // Fetch doctors by category name with their relationships populated
 const getDoctorByCategory = (category) => 
     axiosClient.get(`/doctors?filters[categories][Name][$in]=${category}&populate=*`);
 
 // Fetch doctor details by ID with relationships populated
-const getDoctorById = (id) => 
-    axiosClient.get(`/doctors/${id}?populate=*`);
+const getDoctorById = (id) => axiosClient.get(`/doctors/${id}?populate=*`);
 
 // Fetch user booking list by user email with populated relationships
 const getUserBookingList = (userEmail) => 
     axiosClient.get(`/appointments?filters[Email][$eq]=${userEmail}&populate[doctor][populate][Image][populate][0]=url&populate=*`);
 
-// Book an appointment with symptoms handling
-const bookAppointment = (data) => {
-    const appointmentData = {
-        data: {
-            Name: data.data.Name,
-            Email: data.data.Email,
-            Phone: data.data.Phone,
-            Date: data.data.Date,
-            Time: data.data.Time,
-            doctor: data.data.doctor,
-            symp: data.data.symp || "No symptoms provided",
-            Type: data.data.Type || "In-Person"
-        }
-    };
-    return axiosClient.post('/appointments', appointmentData);
-};
+// Book an appointment
+const bookAppointment = (data) => axiosClient.post('/appointments', data);
 
 // Fetch appointments for a specific doctor and date
 const getDoctorAppointmentsByDate = (doctorId, date) => 
     axiosClient.get(`/appointments?filters[doctor]=${doctorId}&filters[Date][$eq]=${date}`);
 
 // Cancel an appointment by ID
-const cancelAppointment = (id) => 
-    axiosClient.delete(`/appointments/${id}`);
+const cancelAppointment = (id) => axiosClient.delete(`/appointments/${id}`);
 
 // Fetch campaigns
 const getCampaigns = () => axiosClient.get('/campaigns?populate=*');
@@ -58,11 +42,11 @@ const getCampaigns = () => axiosClient.get('/campaigns?populate=*');
 // Fetch galleries
 const getGallery = () => axiosClient.get('/galleries?populate=*');
 
-// Get appointments by doctor name
+// Add this new function in the GlobalApi.jsx file
 const getAppointmentsByName = (doctorName) => 
     axiosClient.get(`/appointments?populate=*&filters[doctor][Name][$eq]=${doctorName}`);
 
-// Save patient symptoms
+// Add these new functions
 const saveSymptoms = (email, symptoms) => 
     axiosClient.post('/patient-symptoms', {
         data: {
@@ -71,11 +55,10 @@ const saveSymptoms = (email, symptoms) =>
         }
     });
 
-// Get symptoms by email
 const getSymptomsByEmail = (email) => 
     axiosClient.get(`/patient-symptoms?filters[email][$eq]=${email}&sort[0]=createdAt:desc`);
 
-// Update appointment symptoms
+// Add this new function to update appointment with symptoms
 const updateAppointmentSymptoms = (appointmentId, symptoms) => 
     axiosClient.put(`/appointments/${appointmentId}`, {
         data: {
@@ -83,59 +66,91 @@ const updateAppointmentSymptoms = (appointmentId, symptoms) =>
         }
     });
 
-// Get appointments by email and date
-const getAppointmentsByEmailAndDate = (email, date) => {
-    const [day, month, year] = date.split('/');
-    const formattedDate = `${year}-${month}-${day}`;
-    const encodedEmail = encodeURIComponent(email);
-    
-    return axiosClient.get(`/appointments?filters[Email][$eq]=${encodedEmail}&filters[Date][$eq]=${formattedDate}`);
-};
-
-// Cancel appointment by email and date
+// Modify the cancelAppointmentByEmailDate function
 const cancelAppointmentByEmailDate = (email, date) => {
+    // Convert date from DD/MM/YYYY to YYYY-MM-DD format
     const [day, month, year] = date.split('/');
     const formattedDate = `${year}-${month}-${day}`;
+    
+    // Use the email exactly as received, only encode for URL
     const encodedEmail = encodeURIComponent(email);
     
+    console.log('Cancellation Request:', {
+        originalEmail: email,
+        encodedEmail: encodedEmail,
+        originalDate: date,
+        formattedDate: formattedDate,
+        url: `/appointments?filters[Email][$eq]=${encodedEmail}&filters[Date][$eq]=${formattedDate}`
+    });
+
     return axiosClient.get(`/appointments?filters[Email][$eq]=${encodedEmail}&filters[Date][$eq]=${formattedDate}`)
         .then(async (response) => {
+            console.log('API Response:', {
+                status: response.status,
+                data: response.data,
+                appointments: response.data.data,
+                filters: {
+                    email: email, // Use original email
+                    date: formattedDate
+                }
+            });
+
             const appointments = response.data.data;
             
+            // Log each appointment for debugging
+            appointments.forEach(app => {
+                console.log('Found Appointment:', {
+                    id: app.id,
+                    email: app.attributes.Email,
+                    date: app.attributes.Date,
+                    exactMatch: app.attributes.Email === email && app.attributes.Date === formattedDate
+                });
+            });
+
             if (appointments.length === 0) {
                 throw new Error('No appointment found for this email and date');
             }
             
-            return Promise.all(appointments.map(appointment => 
-                axiosClient.delete(`/appointments/${appointment.id}`)
-            ));
+            // Delete all appointments matching the email and date
+            const deletePromises = appointments.map(appointment => {
+                console.log('Attempting to delete appointment:', {
+                    id: appointment.id,
+                    email: appointment.attributes.Email,
+                    date: appointment.attributes.Date
+                });
+                return axiosClient.delete(`/appointments/${appointment.id}`);
+            });
+            
+            return Promise.all(deletePromises);
+        })
+        .catch(error => {
+            console.error('Cancellation Error Details:', {
+                error: error.message,
+                response: error.response?.data,
+                requestDetails: {
+                    email: email,
+                    encodedEmail: encodedEmail,
+                    originalDate: date,
+                    formattedDate,
+                }
+            });
+            throw error;
         });
 };
 
-// Get available time slots for a doctor
-const getAvailableTimeSlots = async (doctorId, date, clinicType) => {
-    const dateStr = new Date(date).toISOString().split('T')[0];
-    const response = await getDoctorAppointmentsByDate(doctorId, dateStr);
-    const bookedSlots = response.data.data?.map(appointment => appointment.attributes.Time) || [];
+// Get appointments by email and date
+const getAppointmentsByEmailAndDate = (email, date) => 
+    axiosClient.get(`/appointments?filters[Email][$eq]=${email}&filters[Date][$eq]=${date}`);
 
-    const clinicSlots = {
-        'Morning Clinic': ['9:00 AM', '10:00 AM', '11:00 AM'],
-        'Evening Clinic': ['4:00 PM', '5:00 PM', '6:00 PM'],
-        'AfterNoon Clinic': ['2:00 PM', '3:00 PM', '4:00 PM']
-    };
-
-    const availableSlots = clinicSlots[clinicType]?.filter(slot => !bookedSlots.includes(slot)) || [];
-    return availableSlots;
-};
-
+// Exported API methods
 export default {
     getCategory,
     getDoctorList,
     getDoctorByCategory,
     getDoctorById,
-    bookAppointment,
     getUserBookingList,
     getDoctorAppointmentsByDate,
+    bookAppointment,
     cancelAppointment,
     getCampaigns,
     getGallery,
@@ -144,6 +159,5 @@ export default {
     getSymptomsByEmail,
     updateAppointmentSymptoms,
     cancelAppointmentByEmailDate,
-    getAppointmentsByEmailAndDate,
-    getAvailableTimeSlots
+    getAppointmentsByEmailAndDate
 };
