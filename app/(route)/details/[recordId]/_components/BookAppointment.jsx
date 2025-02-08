@@ -9,14 +9,16 @@ import {
     DialogTrigger,
     DialogFooter,
     DialogClose,
-} from "/components/ui/dialog";
-import { Button } from "/components/ui/button.jsx";
-import { Calendar } from "/components/ui/calendar.jsx";
+} from "../../../../../components/ui/dialog";
+import { Button } from "../../../../../components/ui/button";
+import { Calendar } from "../../../../../components/ui/calendar";
 import { CalendarDays, Clock } from 'lucide-react';
 import { useKindeBrowserClient } from '@kinde-oss/kinde-auth-nextjs';
-import GlobalApi from '/app/_utils/GlobalApi.jsx';
+import GlobalApi from '../../../../../app/_utils/GlobalApi';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
+import { cn } from '../../../../../lib/utils';
+
+import axios from 'axios'; // Make sure to import axios
 
 function BookAppointment({ doctor }) {
     const [date, setDate] = useState(new Date());
@@ -31,6 +33,10 @@ function BookAppointment({ doctor }) {
     const [clinicType, setClinicType] = useState('Morning Clinic - Ratnamukund Clinic, Warje');
     const [successMessage, setSuccessMessage] = useState('');
     const [error, setError] = useState('');
+    const [currentMonth, setCurrentMonth] = useState(() => {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), 1);
+    });
 
     const getTimeSlotsForDoctor = (doctorId) => {
         const doctorTimeSlots = {
@@ -49,7 +55,75 @@ function BookAppointment({ doctor }) {
         return doctorTimeSlots[doctorId] || { morning: [[9, 0], [12, 0]], evening: [[13, 0], [18, 0]] };
     };
     
+    const updateAvailableTimeSlots = (bookedSlots) => {
+        const timeList = [];
+        const clinicTypeOnly = clinicType.split(" - ")[0];
+        const { morning, evening, AfterNoon } = getTimeSlotsForDoctor(doctor.id);
+    
+        const isToday = isSameDay(date, new Date());
+        const now = new Date();
+        const dayOfWeek = date.getDay();
+    
+        if (dayOfWeek === 0) {
+            setTimeSlots([]);
+            return;
+        }
+    
+        const generateTimeSlots = (startTime, endTime) => {
+            let [currentHour, currentMinutes] = startTime;
+            const [endHour, endMinutes] = endTime;
+    
+            while (currentHour < endHour || (currentHour === endHour && currentMinutes < endMinutes)) {
+                const slotTime = new Date(date);
+                slotTime.setHours(currentHour, currentMinutes);
+    
+                if (isToday && slotTime <= now) {
+                    currentMinutes += 15;
+                    if (currentMinutes === 60) {
+                        currentHour++;
+                        currentMinutes = 0;
+                    }
+                    continue;
+                }
+    
+                const formattedTime = formatTime(slotTime);
+                if (!bookedSlots.includes(formattedTime)) {
+                    timeList.push(formattedTime);
+                }
+    
+                currentMinutes += 15;
+                if (currentMinutes === 60) {
+                    currentHour++;
+                    currentMinutes = 0;
+                }
+            }
+        };
+    
+        if (doctor.id === 5) {
+            if (clinicTypeOnly === 'Morning Clinic' && (dayOfWeek === 1 || dayOfWeek === 6)) {
+                generateTimeSlots(morning[0], morning[1]);
+            } else if (clinicTypeOnly === 'Evening Clinic' && dayOfWeek === 4) {
+                generateTimeSlots(evening[0], evening[1]);
+            } else {
+                setTimeSlots([]);
+                return;
+            }
+        } else {
+            if (clinicTypeOnly === 'Morning Clinic' && morning) {
+                generateTimeSlots(morning[0], morning[1]);
+            } else if (clinicTypeOnly === 'Evening Clinic' && evening) {
+                generateTimeSlots(evening[0], evening[1]);
+            } else if (clinicTypeOnly === 'AfterNoon Clinic' && AfterNoon) {
+                generateTimeSlots(AfterNoon[0], AfterNoon[1]);
+            }
+        }
+    
+        setTimeSlots(timeList);
+    };
+    
     useEffect(() => {
+        if (!date) return;
+
         const fetchBookedSlotsAndUpdateTimeSlots = async () => {
             try {
                 const dateStr = date.toLocaleDateString('en-CA');
@@ -63,109 +137,13 @@ function BookAppointment({ doctor }) {
                 }));
                 updateAvailableTimeSlots(bookedTimes);
             } catch (error) {
-                console.error("Failed to fetch booked slots:", error.response ? error.response.data : error.message);
+                console.error("Failed to fetch booked slots:", error);
             }
         };
 
-        
-    
-        const updateAvailableTimeSlots = (bookedSlots) => {
-            const timeList = [];
-            const clinicTypeOnly = clinicType.split(" - ")[0];
-            const { morning, evening, AfterNoon } = getTimeSlotsForDoctor(doctor.id);
-        
-            const isToday = isSameDay(date, new Date());
-            const isTomorrow = isSameDay(date, new Date(Date.now() + 24 * 60 * 60 * 1000)); // Check if the selected date is tomorrow
-            const now = new Date();
-            const dayOfWeek = date.getDay(); // Get the day of the week (0 for Sunday, 1 for Monday, ..., 6 for Saturday)
-        
-            // Check if the selected date is Sunday (0 represents Sunday)
-            if (dayOfWeek === 0 || isTomorrow) {  // Block slots for Sunday and tomorrow
-                setTimeSlots([]);  // Clinic is closed or time slots blocked for the next day
-                return;
-            }
-        
-            const generateTimeSlots = (startTime, endTime) => {
-                let [currentHour, currentMinutes] = startTime;
-                const [endHour, endMinutes] = endTime;
-        
-                while (currentHour < endHour || (currentHour === endHour && currentMinutes < endMinutes)) {
-                    const slotTime = new Date(date);
-                    slotTime.setHours(currentHour, currentMinutes);
-        
-                    if (isToday && slotTime <= now) {
-                        currentMinutes += 15;
-                        if (currentMinutes === 60) {
-                            currentHour++;
-                            currentMinutes = 0;
-                        }
-                        continue;
-                    }
-        
-                    const formattedTime = formatTime(slotTime);
-                    if (!bookedSlots.includes(formattedTime)) {
-                        timeList.push(formattedTime);
-                    }
-        
-                    // Increment minutes by 15
-                    currentMinutes += 15;
-                    if (currentMinutes === 60) {
-                        currentHour++;
-                        currentMinutes = 0;
-                    }
-                }
-            };
-        
-            // Special case for doctor ID 5: Morning and Evening slots only on Monday, Saturday, and Thursday
-            if (doctor.id === 5) {
-                if (clinicTypeOnly === 'Morning Clinic' && (dayOfWeek === 1 || dayOfWeek === 6)) { // Monday and Saturday for morning
-                    generateTimeSlots(morning[0], morning[1]);
-                } else if (clinicTypeOnly === 'Evening Clinic' && dayOfWeek === 4) { // Thursday for evening
-                    generateTimeSlots(evening[0], evening[1]);
-                } else {
-                    setTimeSlots([]); // No time slots for other days for ID 5
-                    return;
-                }
-            } else {
-                // Normal behavior for other doctor IDs
-                if (clinicTypeOnly === 'Morning Clinic' && morning) {
-                    generateTimeSlots(morning[0], morning[1]);
-                } else if (clinicTypeOnly === 'Evening Clinic' && evening) {
-                    generateTimeSlots(evening[0], evening[1]);
-                } else if (clinicTypeOnly === 'AfterNoon Clinic' && AfterNoon) {
-                    generateTimeSlots(AfterNoon[0], AfterNoon[1]);
-                }
-            }
-        
-            setTimeSlots(timeList);
-        };        
-        
-    fetchBookedSlotsAndUpdateTimeSlots();
-    }, [date, clinicType, doctor.id]);
-    
-    useEffect(() => {
-        // Set up polling to refresh available slots every 10 seconds
-        const interval = setInterval(() => {
-            const fetchBookedSlotsAndUpdateTimeSlots = async () => {
-                try {
-                    const dateStr = date.toLocaleDateString('en-CA');
-                    const response = await GlobalApi.getDoctorAppointmentsByDate(doctor.id, dateStr);
-                    const bookedTimes = response.data.data
-                        ? response.data.data.map(appointment => appointment.attributes.Time)
-                        : [];
-                    setBookedSlotsByDate(prev => ({
-                        ...prev,
-                        [dateStr]: bookedTimes
-                    }));
-                    updateAvailableTimeSlots(bookedTimes);
-                } catch (error) {
-                    console.error("Failed to fetch booked slots:", error.response ? error.response.data : error.message);
-                }
-            };
-            fetchBookedSlotsAndUpdateTimeSlots();
-        }, 1000); // Polling every 1 seconds (1000 ms)
-    
-        // Clean up the interval when the component is unmounted
+        const interval = setInterval(fetchBookedSlotsAndUpdateTimeSlots, 1000);
+        fetchBookedSlotsAndUpdateTimeSlots();
+
         return () => clearInterval(interval);
     }, [date, clinicType, doctor.id]);
     
@@ -191,8 +169,14 @@ function BookAppointment({ doctor }) {
             setLoading(false);
             return;
         }
+
+        if (!date) {
+            setSuccessMessage('Please select a date.');
+            setLoading(false);
+            return;
+        }
     
-        const dateStr = date.toLocaleDateString('en-CA'); // This will be used for internal data
+        const dateStr = date.toLocaleDateString('en-CA'); // Now date is guaranteed to exist
     
         // Fetch the latest booked slots before saving the booking
         try {
@@ -221,7 +205,6 @@ function BookAppointment({ doctor }) {
             };
     
             // Save the appointment
-            console.log("book appoinemtnt data:",data);
             await GlobalApi.bookAppointment(data);
     
             // Prepare form data for the message
@@ -250,8 +233,8 @@ function BookAppointment({ doctor }) {
     const sendMessage = async (formData) => {
         const phoneNumbers = [
             "+918149623527",
-            // "+919822038877",
-            // "+919764432460",
+            "+919822038877",
+            "+919764432460",
         ];
     
         try {
@@ -323,6 +306,23 @@ function BookAppointment({ doctor }) {
         return `${hours}:${minutesStr} ${ampm}`;
     };
 
+    const handleMonthChange = (month) => {
+        setCurrentMonth(month);
+    };
+
+    // Add this function to check if a date has available slots
+    const hasAvailableSlots = (date) => {
+        const clinicTypeOnly = clinicType.split(" - ")[0];
+        const dayOfWeek = date.getDay();
+        
+        if (doctor.id === 5) {
+            return (clinicTypeOnly === 'Morning Clinic' && (dayOfWeek === 1 || dayOfWeek === 6)) ||
+                   (clinicTypeOnly === 'Evening Clinic' && dayOfWeek === 4);
+        }
+        
+        return true; // For other doctors
+    };
+
     return (
         <Dialog>
             <DialogTrigger>
@@ -332,20 +332,103 @@ function BookAppointment({ doctor }) {
                 <div className="h-full flex flex-col">
                     <DialogHeader>
                         <DialogTitle>Book Appointment</DialogTitle>
-                        <DialogDescription>
+                        <div className="mt-4">
                             <div className='grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6'>
                                 <div className='flex flex-col gap-4'>
                                     <h2 className='flex gap-2 items-center text-lg md:text-xl'>
                                         <CalendarDays className='text-primary h-5 w-5' />
                                         Select Date
                                     </h2>
-                                    <Calendar
-                                        mode="single"
-                                        selected={date}
-                                        onSelect={setDate}
-                                        disabled={isPastDay}
-                                        className="rounded-md border w-full"
-                                    />
+                                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3">
+                                        <Calendar
+                                            mode="single"
+                                            selected={date}
+                                            onSelect={(newDate) => setDate(newDate)}
+                                            month={currentMonth}
+                                            onMonthChange={handleMonthChange}
+                                            className="rounded-lg w-full max-w-[350px]"
+                                            disabled={(d) => {
+                                                const today = new Date();
+                                                today.setHours(0, 0, 0, 0);
+                                                return d < today || !hasAvailableSlots(d);
+                                            }}
+                                            modifiers={{
+                                                unavailable: (d) => !hasAvailableSlots(d)
+                                            }}
+                                            showOutsideDays={false}
+                                            fixedWeeks={true}
+                                            weekStartsOn={0}
+                                            classNames={{
+                                                months: "flex flex-col space-y-4",
+                                                month: "space-y-4",
+                                                caption: "flex justify-center relative items-center h-10",
+                                                caption_label: "text-sm font-medium",
+                                                nav: "hidden",
+                                                table: "w-full border-collapse",
+                                                head_row: "flex justify-between w-full",
+                                                head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] text-center",
+                                                row: "flex w-full mt-2",
+                                                cell: "text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-range-start)]:rounded-l-md first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md",
+                                                day: cn(
+                                                    "h-9 w-9 p-0 font-normal",
+                                                    "aria-selected:opacity-100",
+                                                    "hover:bg-gray-100 hover:text-gray-900",
+                                                    "focus-visible:bg-gray-100 focus-visible:text-gray-900 focus-visible:rounded-sm",
+                                                    "text-sm transition-colors text-center"
+                                                ),
+                                                day_range_end: "day-range-end",
+                                                day_range_start: "day-range-start",
+                                                day_selected: 
+                                                    "bg-blue-600 text-white hover:bg-blue-700 hover:text-white focus:bg-blue-600 focus:text-white rounded-md",
+                                                day_today: "bg-accent text-accent-foreground",
+                                                day_outside: "invisible pointer-events-none",
+                                                day_disabled: "text-gray-300 cursor-not-allowed",
+                                                day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
+                                                day_hidden: "invisible",
+                                                day_unavailable: "text-gray-300",
+                                            }}
+                                            components={{
+                                                IconLeft: () => null,
+                                                IconRight: () => null
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between items-center mt-4 px-4">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="text-gray-600 hover:text-gray-900"
+                                            onClick={() => {
+                                                const newDate = new Date(currentMonth);
+                                                newDate.setMonth(currentMonth.getMonth() - 1, 1);
+                                                const today = new Date();
+                                                // Only allow navigation to current month and forward
+                                                if (newDate >= new Date(today.getFullYear(), today.getMonth(), 1)) {
+                                                    setCurrentMonth(newDate);
+                                                }
+                                            }}
+                                        >
+                                            Previous Month
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="text-gray-600 hover:text-gray-900"
+                                            onClick={() => {
+                                                const newDate = new Date(currentMonth);
+                                                newDate.setMonth(currentMonth.getMonth() + 1, 1);
+                                                const maxDate = new Date();
+                                                maxDate.setFullYear(maxDate.getFullYear() + 1);
+                                                maxDate.setMonth(maxDate.getMonth() + 1);
+                                                // Only allow navigation up to next year + 1 month
+                                                if (newDate <= maxDate) {
+                                                    setCurrentMonth(newDate);
+                                                }
+                                            }}
+                                        >
+                                            Next Month
+                                        </Button>
+                                    </div>
                                     <div className='mt-4'>
                                         <h2 className='flex gap-2 items-center text-lg md:text-xl'>
                                             <Clock className='text-primary h-5 w-5' />
@@ -379,13 +462,13 @@ function BookAppointment({ doctor }) {
                                                 </button>
                                             ))
                                         ) : (
-                                            <p>No available time slots for the selected date and clinic type.</p>
+                                            <div className="text-gray-500">No available time slots for the selected date and clinic type.</div>
                                         )}
                                     </div>
                                     <div className='mt-5'>
-                                    <label className='block text-lg md:text-xl'>
-                                        Phone Number:<span className="text-red-500"> *</span>
-                                    </label>
+                                        <label className='block text-lg md:text-xl'>
+                                            Phone Number:<span className="text-red-500"> *</span>
+                                        </label>
                                         <input
                                             type="tel"
                                             value={phoneNumber}
@@ -405,7 +488,7 @@ function BookAppointment({ doctor }) {
                                     </div>
                                 </div>
                             </div>
-                        </DialogDescription>
+                        </div>
                     </DialogHeader>
                     <DialogFooter className="flex flex-col-reverse md:flex-row gap-3">
                         <Button
@@ -421,17 +504,10 @@ function BookAppointment({ doctor }) {
                         </DialogClose>
                     </DialogFooter>
                     {successMessage && (
-    <div
-        className={`text-center mt-3 ${
-            successMessage.toLowerCase().includes('successful')
-                ? 'text-green-600'
-                : 'text-red-600'
-        }`}
-    >
-        {successMessage}
-    </div>
-)}
-
+                        <div className="text-center text-red-600 mt-3">
+                            {successMessage}
+                        </div>
+                    )}
                 </div>
             </DialogContent>
         </Dialog>

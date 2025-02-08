@@ -63,6 +63,7 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -75,16 +76,21 @@ body {
   font-family: Arial, sans-serif;
 }
 
-input::placeholder, textarea::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: rgb(151, 195, 209);
   font-size: 13px;
   font-weight: light;
 }
 
-#fullname:hover, #fullname:focus,
-#email:hover, #email:focus,
-#phone:hover, #phone:focus,
-#message:hover, #message:focus {
+#fullname:hover,
+#fullname:focus,
+#email:hover,
+#email:focus,
+#phone:hover,
+#phone:focus,
+#message:hover,
+#message:focus {
   border-bottom: 2px solid blue;
 }
 
@@ -130,31 +136,40 @@ input::placeholder, textarea::placeholder {
 /* Responsive adjustments */
 @media (min-width: 640px) {
   .dropdown {
-    max-width: 300px; /* Adjust max-width for larger screens */
+    max-width: 300px;
+    /* Adjust max-width for larger screens */
   }
 
-  input::placeholder, textarea::placeholder {
-    font-size: 14px; /* Slightly larger placeholder text on larger screens */
+  input::placeholder,
+  textarea::placeholder {
+    font-size: 14px;
+    /* Slightly larger placeholder text on larger screens */
   }
 }
 
 @media (min-width: 768px) {
   .dropdown {
-    max-width: 400px; /* Adjust max-width for medium screens */
+    max-width: 400px;
+    /* Adjust max-width for medium screens */
   }
 
-  input::placeholder, textarea::placeholder {
-    font-size: 15px; /* Larger placeholder text on medium screens */
+  input::placeholder,
+  textarea::placeholder {
+    font-size: 15px;
+    /* Larger placeholder text on medium screens */
   }
 }
 
 @media (min-width: 1024px) {
   .dropdown {
-    max-width: 500px; /* Adjust max-width for large screens */
+    max-width: 500px;
+    /* Adjust max-width for large screens */
   }
 
-  input::placeholder, textarea::placeholder {
-    font-size: 16px; /* Larger placeholder text on large screens */
+  input::placeholder,
+  textarea::placeholder {
+    font-size: 16px;
+    /* Larger placeholder text on large screens */
   }
 }
 
@@ -199,14 +214,19 @@ input::placeholder, textarea::placeholder {
 /* Container for main layout */
 .main-container {
   @apply flex flex-col lg:flex-row items-center lg:items-stretch justify-center lg:justify-between;
-  height: auto; /* For mobile view */
-  margin: 5rem 2rem; /* Mobile margin */
+  height: auto;
+  /* For mobile view */
+  margin: 5rem 2rem;
+  /* Mobile margin */
 }
 
-@media (min-width: 1024px) { /* For large screens */
+@media (min-width: 1024px) {
+
+  /* For large screens */
   .main-container {
-      height: 36rem; /* Adjusted height */
-      margin: 7rem 16.5rem;
+    height: 36rem;
+    /* Adjusted height */
+    margin: 7rem 16.5rem;
   }
 }
 
@@ -218,18 +238,34 @@ input::placeholder, textarea::placeholder {
 /* Header text */
 .header-text {
   @apply text-xl lg:text-[2.75rem] flex justify-center font-bold;
-  color: #1e40af; /* Blue-800 color */
+  color: #1e40af;
+  /* Blue-800 color */
 }
 
 /* Timings section */
 .timings-container {
   @apply max-w-3xl w-full lg:w-[48%] h-full lg:h-full mt-8 lg:mt-0 p-4;
-  background: linear-gradient(to right, #00bcd4, #4f46e5); /* Gradient from cyan-400 to indigo-700 */
-  border-radius: 1rem; /* Rounded corners */
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Shadow */
+  background: linear-gradient(to right, #00bcd4, #4f46e5);
+  /* Gradient from cyan-400 to indigo-700 */
+  border-radius: 1rem;
+  /* Rounded corners */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  /* Shadow */
 }
 
 /* Map component container */
 .map-container {
-  @apply mt-8 border-4 border-black; /* Margin top */
+  @apply mt-8 border-4 border-black;
+  /* Margin top */
+}
+
+/* Add these styles for better chart responsiveness */
+.recharts-wrapper {
+  margin: 0 auto;
+}
+
+.recharts-default-tooltip {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid #ccc !important;
+  border-radius: 4px !important;
 }

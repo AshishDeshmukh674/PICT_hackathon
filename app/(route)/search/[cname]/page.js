@@ -1,6 +1,6 @@
 "use client";
-import DoctorList from '@/app/_components/DoctorList';
-import GlobalApi from '@/app/_utils/GlobalApi';
+import DoctorList from '../../../../app/_components/DoctorList';
+import GlobalApi from '../../../../app/_utils/GlobalApi';
 import React, { useEffect, useState } from 'react';
 
 function Search({ params }) {
