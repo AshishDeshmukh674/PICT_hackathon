@@ -612,6 +612,40 @@ const checkChatMemory = async () => {
   }
 };
 
+// Add this function to clear chat memory
+const clearChatMemory = async () => {
+  try {
+    console.log('Clearing chat memory...');
+    const emptyMemory = {
+      data: {
+        UserName: null,
+        Email: null,
+        Time: null,
+        Date: null,
+        doctor: null,
+        PhoneNumber: null
+      },
+      lastUpdated: new Date().toISOString()
+    };
+
+    const response = await fetch('/api/chatHistory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        chatHistory: [],
+        clearMemory: true  // Add this flag to indicate clearing memory
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to clear chat memory');
+    }
+    console.log('Chat memory cleared successfully');
+  } catch (error) {
+    console.error('Error clearing chat memory:', error);
+  }
+};
+
 export default function ChatBot({ isOpen, onClose, onOpen }) {
   const [userInput, setUserInput] = useState("");
   const [chatHistory, setChatHistory] = useState([
@@ -1255,32 +1289,27 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
           break;
 
         case 2:
-          if (memory?.Email) {
-            setBookingData(prev => ({ ...prev, email: memory.Email }));
-            setBookingStep(3);
-            if (memory?.PhoneNumber) {
-              setBookingData(prev => ({ ...prev, phone: memory.PhoneNumber }));
-              setBookingStep(4);
-              // Show doctor list
-              await handleDoctorList(messages);
-            } else {
-              await speak(messages.providePhone);
-              setChatHistory(prev => [...prev, { 
-                role: "assistant", 
-                content: messages.providePhone 
-              }]);
-            }
+          // Email validation and handling
+          if (!isValidEmail(input)) {
+            await speak(messages.invalidEmail);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.invalidEmail 
+            }]);
+            break;
+          }
+          
+          setBookingData(prev => ({ ...prev, email: input }));
+          
+          // Check if phone number exists in memory
+          if (memory?.data?.PhoneNumber) {
+            // Use phone number from memory and skip to doctor selection
+            setBookingData(prev => ({ ...prev, phone: memory.data.PhoneNumber }));
+            setBookingStep(4);
+            // Show doctor list
+            await handleDoctorList(messages);
           } else {
-            // Original email validation logic
-            if (!isValidEmail(input)) {
-              await speak(messages.invalidEmail);
-              setChatHistory(prev => [...prev, { 
-                role: "assistant", 
-                content: messages.invalidEmail 
-              }]);
-              break;
-            }
-            setBookingData(prev => ({ ...prev, email: input }));
+            // Only ask for phone if it's not in memory
             setBookingStep(3);
             await speak(messages.providePhone);
             setChatHistory(prev => [...prev, { 
@@ -1291,18 +1320,11 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
           break;
 
         case 3:
-          if (memory?.PhoneNumber) {
-            setBookingData(prev => ({ ...prev, phone: memory.PhoneNumber }));
-            setBookingStep(4);
-            // Show doctor list
-            await handleDoctorList(messages);
-          } else {
-            // Original phone number logic
-            setBookingData(prev => ({ ...prev, phone: input }));
-            setBookingStep(4);
-            // Show doctor list
-            await handleDoctorList(messages);
-          }
+          // This case should only be reached if phone number wasn't in memory
+          setBookingData(prev => ({ ...prev, phone: input }));
+          setBookingStep(4);
+          // Show doctor list
+          await handleDoctorList(messages);
           break;
 
         case 4:
@@ -1439,7 +1461,7 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
                 Date: bookingData.date,
                 doctor: bookingData.doctorId,
                 symp: localStorage.getItem('currentSymptoms') || "No symptoms recorded",
-                clinicType: clinicType
+              
               }
             };
 
@@ -2162,6 +2184,19 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     }
   }, [recognitionError]);
 
+  // Add useEffect to handle cleanup when chat closes
+  useEffect(() => {
+    if (!isOpen) {
+      clearChatMemory();
+    }
+  }, [isOpen]);
+
+  // Modify the existing close handler if you have one
+  const handleClose = async () => {
+    await clearChatMemory();
+    onClose();
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -2171,7 +2206,7 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
           exit={{ opacity: 0, y: 50 }}
           className="fixed bottom-4 right-4 w-96 bg-white rounded-lg shadow-xl"
         >
-          <ChatHeader onClose={onClose} />
+          <ChatHeader onClose={handleClose} />
           <ScrollArea className="h-[400px] p-4">
             {chatHistory.map((msg, idx) => (
               <ChatMessage key={idx} role={msg.role} content={msg.content} />

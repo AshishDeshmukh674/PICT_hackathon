@@ -90,7 +90,32 @@ async function extractInformation(chatHistory) {
 
 export async function POST(request) {
   try {
-    const { chatHistory } = await request.json();
+    const { chatHistory, clearMemory } = await request.json();
+
+    // If clearMemory flag is true, reset the memory file
+    if (clearMemory) {
+      const emptyMemory = {
+        data: {
+          UserName: null,
+          Email: null,
+          Time: null,
+          Date: null,
+          doctor: null,
+          PhoneNumber: null
+        },
+        lastUpdated: new Date().toISOString()
+      };
+
+      await writeFile(CHAT_MEMORY_FILE, JSON.stringify(emptyMemory, null, 2));
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'Chat memory cleared'
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
 
     // Read existing memory
     const existingMemory = await readMemoryFile();
