@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react';
 import { Upload, Loader2 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import * as pdfjsLib from 'pdfjs-dist';
+import { processExtractedText } from '../utils/chatProcessing';
 
 interface FileUploadHandlerProps {
   onExtractedText: (text: string) => void;
+  language?: string;
 }
 
-export function FileUploadHandler({ onExtractedText }: FileUploadHandlerProps) {
+export function FileUploadHandler({ onExtractedText, language = 'en' }: FileUploadHandlerProps) {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Initialize PDF.js worker
@@ -66,7 +68,24 @@ export function FileUploadHandler({ onExtractedText }: FileUploadHandlerProps) {
         extractedText = await processPDF(file);
       }
 
-      onExtractedText(extractedText);
+      // Process the extracted text
+      const processed = await processExtractedText(extractedText, file.type);
+
+      // Process through chat history
+      await fetch('/api/chatHistory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatHistory: [{
+            role: 'user',
+            content: `Extracted text from ${file.type} document: ${processed.text}`
+          }],
+          metadata: processed.metadata,
+          language
+        })
+      });
+
+      onExtractedText(processed.text);
     } catch (error) {
       console.error('Error processing file:', error);
     } finally {

@@ -964,7 +964,27 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     return prompts;
   };
 
-  // Update the handleUserInput function to add retry logic
+  // Add new function to process chat history
+  const processChatHistory = async (history) => {
+    try {
+      const response = await fetch('/api/chatHistory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatHistory: history })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process chat history');
+      }
+
+      const data = await response.json();
+      console.log('Updated chat memory:', data.memory);
+    } catch (error) {
+      console.error('Error processing chat history:', error);
+    }
+  };
+
+  // Update handleUserInput to include chat history processing
   const handleUserInput = async (input) => {
     if (!input.trim()) return;
     
@@ -1028,16 +1048,22 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
 
             const data = await response.json();
             
+            // Add chat history processing
+            const updatedHistory = [
+              ...chatHistory,
+              { role: "user", content: input },
+              { role: "assistant", content: data.response }
+            ];
+            
+            await processChatHistory(updatedHistory);
+
             // Reset states before speaking to ensure clean state
             setError(null);
             setCanStartRecording(true);
             setIsRecording(false);
             
             await speak(data.response);
-            setChatHistory(prev => [...prev, { 
-              role: "assistant", 
-              content: data.response 
-            }]);
+            setChatHistory(updatedHistory);
 
             // Check for doctor type in response
             const llmResponse = data.response;
