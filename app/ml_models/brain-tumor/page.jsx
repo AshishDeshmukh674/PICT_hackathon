@@ -11,66 +11,110 @@ export default function BrainTumorDetection() {
     const imageRef = useRef(null);
     const containerRef = useRef(null);
 
-    const drawBoundingBox = () => {
-        if (prediction?.box && imageRef.current && canvasRef.current) {
-            const canvas = canvasRef.current;
-            const ctx = canvas.getContext('2d');
-            const image = imageRef.current;
+    const drawDetection = () => {
+        if (!prediction) return;
 
-            // Get the actual displayed image dimensions
-            const displayedWidth = image.width;
-            const displayedHeight = image.height;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const image = imageRef.current;
 
-            // Set canvas size to match the actual image size
-            canvas.width = displayedWidth;
-            canvas.height = displayedHeight;
+        // Set canvas dimensions to match displayed image
+        canvas.width = image.width;
+        canvas.height = image.height;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Clear previous drawings
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Only draw tumor detection if tumor is detected
+        if (prediction.prediction === "Tumor Detected" && prediction.box) {
+            // Calculate scale factors
+            const scaleX = image.width / image.naturalWidth;
+            const scaleY = image.height / image.naturalHeight;
+
+            // Draw polygon if points are available
+            if (prediction.points && prediction.points.length > 0) {
+                ctx.beginPath();
+
+                // Scale the first point
+                const firstPoint = prediction.points[0];
+                ctx.moveTo(
+                    firstPoint.x * scaleX,
+                    firstPoint.y * scaleY
+                );
+
+                // Scale and draw the rest of the points
+                for (let i = 1; i < prediction.points.length; i++) {
+                    const point = prediction.points[i];
+                    ctx.lineTo(
+                        point.x * scaleX,
+                        point.y * scaleY
+                    );
+                }
+
+                // Close the polygon
+                ctx.closePath();
+
+                // Set polygon style
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Fill with semi-transparent red
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+                ctx.fill();
+            }
 
             // Draw bounding box
             ctx.strokeStyle = '#00ff00';
             ctx.lineWidth = 2;
 
-            // Get original image dimensions
-            const naturalWidth = image.naturalWidth;
-            const naturalHeight = image.naturalHeight;
-
-            // Calculate scaling factors based on the actual image size
-            const scaleX = displayedWidth / naturalWidth;
-            const scaleY = displayedHeight / naturalHeight;
-
-            // Get YOLO coordinates
+            // Scale the bounding box coordinates
             const [x1, y1, x2, y2] = prediction.box;
-
-            // Scale coordinates to match the displayed image size
-            const boxX = x1 * scaleX;
-            const boxY = y1 * scaleY;
-            const boxWidth = (x2 - x1) * scaleX;
-            const boxHeight = (y2 - y1) * scaleY;
+            const scaledX1 = x1 * scaleX;
+            const scaledY1 = y1 * scaleY;
+            const scaledWidth = (x2 - x1) * scaleX;
+            const scaledHeight = (y2 - y1) * scaleY;
 
             // Draw rectangle
-            ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+            ctx.strokeRect(scaledX1, scaledY1, scaledWidth, scaledHeight);
 
-            // Add confidence label with background
-            ctx.font = 'bold 16px Arial';
+            // Add confidence label
             const confidence = (prediction.confidence * 100).toFixed(1);
             const label = `Tumor ${confidence}%`;
 
-            // Add background for text
+            ctx.font = 'bold 16px Arial';
             const textMetrics = ctx.measureText(label);
             const padding = 4;
+
+            // Draw label background
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             ctx.fillRect(
-                boxX,
-                boxY - 25,
+                scaledX1,
+                scaledY1 - 25,
                 textMetrics.width + (padding * 2),
                 25
             );
 
-            // Draw text
+            // Draw label text
             ctx.fillStyle = '#00ff00';
-            ctx.fillText(label, boxX + padding, boxY - 7);
+            ctx.fillText(label, scaledX1 + padding, scaledY1 - 7);
+        } else if (prediction.prediction === "No Tumor Detected") {
+            // Draw "No Tumor" text
+            ctx.font = 'bold 24px Arial';
+            ctx.fillStyle = '#00ff00';
+            const text = "No Tumor Detected";
+            const textMetrics = ctx.measureText(text);
+
+            // Position text in top-left corner
+            const padding = 10;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(
+                padding,
+                padding,
+                textMetrics.width + padding * 2,
+                30
+            );
+
+            ctx.fillStyle = '#00ff00';
+            ctx.fillText(text, padding * 2, padding + 22);
         }
     };
 
@@ -106,10 +150,10 @@ export default function BrainTumorDetection() {
     }, [preview]);
 
     useEffect(() => {
-        if (prediction?.box && imageDimensions.width > 0) {
-            drawBoundingBox();
+        if (prediction?.box) {
+            drawDetection();
         }
-    }, [prediction, imageDimensions]);
+    }, [prediction]);
 
     const handleImageUpload = (event) => {
         const file = event.target.files[0];
@@ -154,7 +198,8 @@ export default function BrainTumorDetection() {
             setPrediction({
                 prediction: data.prediction,
                 confidence: data.confidence,
-                box: data.box
+                box: data.box,
+                points: data.points
             });
         } catch (error) {
             console.error('Error:', error);
@@ -211,11 +256,10 @@ export default function BrainTumorDetection() {
                                         src={preview}
                                         alt="Preview"
                                         style={{
-                                            width: '100%',
-                                            height: '100%',
-                                            maxHeight: '450px',
-                                            objectFit: 'contain'
+                                            width: imageDimensions.width + 'px',
+                                            height: imageDimensions.height + 'px'
                                         }}
+                                        className="max-w-full h-auto"
                                     />
                                     <canvas
                                         ref={canvasRef}
