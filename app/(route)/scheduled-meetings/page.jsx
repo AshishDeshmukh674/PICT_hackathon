@@ -8,9 +8,9 @@ import {
   where,
   getDocs,
 } from "firebase/firestore";
-import { app } from "@/config/FirebaseConfig";
+import { app } from "../../config/FirebaseConfig";
 import { toast } from "sonner";
-import ScheduledMeetingList from "../dashboard/scheduled-meeting/_components/ScheduledMeetingList";
+import ScheduledMeetingList from "../dashboard/scheduled-meeting/_components/ScheduledMeetingList.jsx";
 
 export default function ScheduledMeetings() {
   const [meetingList, setMeetingList] = useState([]);
