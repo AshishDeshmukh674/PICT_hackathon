@@ -10,9 +10,27 @@ jobs:
   deploy:
     runs-on: self-hosted
 
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}  # Ensures CI must succeed before CD runs
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.jobs.*.steps[?(@.name=='Run Tests')].conclusion == 'success'
 
     steps:
+      - name: Download test results
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results
+          path: coverage/
+
+      - name: Check test coverage
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+            if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+              echo "Test coverage below 80%"
+              exit 1
+            fi
+          fi
+
       - name: Install Docker Compose
         run: |
           sudo apt-get update && sudo apt-get install -y docker-compose || true
@@ -30,7 +48,7 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: echo "$DOCKER_PASSWORD" | sudo docker login -u "$DOCKER_USERNAME" --password-stdin
 
-      - name: Stop and Remove Old `pict_backend_live` Container
+      - name: Stop and Remove Old Container
         run: |
           sudo docker stop pict_backend_live || true
           sudo docker rm pict_backend_live || true
@@ -41,10 +59,10 @@ jobs:
       - name: Remove Old Docker Image
         run: sudo docker rmi nishchaybhardwaj/pict_backend_live:latest || true
 
-      - name: Pull the Latest Docker Image from Docker Hub
+      - name: Pull the Latest Docker Image
         run: sudo docker pull nishchaybhardwaj/pict_backend_live:latest
 
-      - name: Start New `pict_backend_live` Container
+      - name: Start New Container
         run: |
           sudo docker run -d --name pict_backend_live -p 8081:5000 --restart unless-stopped \
           nishchaybhardwaj/pict_backend_live:latest
