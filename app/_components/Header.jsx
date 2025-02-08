@@ -145,14 +145,46 @@ function Header() {
               { id: 1, name: "Home", path: "/" },
               { id: 2, name: "Explore", path: "/#category-search" },
               { id: 3, name: "Contact", path: "/#Contact-us" },
+              {
+                id: 4,
+                name: "More",
+                subItems: [
+                  { id: 'stats', name: "Stats", path: "/stats" },
+                  { id: 'ml_models', name: "ML Models", path: "/ml_models" }, // Changed from models to ml_models
+                ],
+              },
             ].map((item) => (
-              <Link
-                href={item.path}
-                key={item.id}
-                className="text-gray-800 hover:text-primary transition duration-300 ease-in-out text-lg font-medium"
-              >
-                {item.name}
-              </Link>
+              item.subItems ? (
+                <Popover key={item.id}>
+                  <PopoverTrigger>
+                    <span className="text-gray-800 hover:text-primary transition duration-300 ease-in-out text-lg font-medium cursor-pointer">
+                      {item.name}
+                    </span>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48 p-2 bg-white border border-gray-200 shadow-lg rounded-md">
+                    <ul className="flex flex-col gap-2">
+                      {item.subItems.map((subItem) => (
+                        <li key={subItem.id} className="cursor-pointer hover:bg-gray-100 p-2 rounded-md">
+                          <Link
+                            href={subItem.path}
+                            className="text-gray-800 hover:text-primary transition duration-300 ease-in-out"
+                          >
+                            {subItem.name}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <Link
+                  href={item.path}
+                  key={item.id}
+                  className="text-gray-800 hover:text-primary transition duration-300 ease-in-out text-lg font-medium"
+                >
+                  {item.name}
+                </Link>
+              )
             ))}
           </nav>
         </div>
