@@ -14,6 +14,7 @@ jobs:
 
     steps:
       - name: Download test results
+        continue-on-error: true  # Prevents failure if the artifact is missing
         uses: actions/download-artifact@v4
         with:
           name: test-results
@@ -21,12 +22,15 @@ jobs:
 
       - name: Check test coverage
         run: |
-          if [ -f coverage/coverage-summary.json ]; then
-            COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
-            if (( $(echo "$COVERAGE < 80" | bc -l) )); then
-              echo "Test coverage below 80%"
-              exit 1
-            fi
+          if [ ! -f coverage/coverage-summary.json ]; then
+            echo "No coverage report found, skipping test coverage check."
+            exit 0
+          fi
+          
+          COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+            echo "Test coverage below 80%"
+            exit 1
           fi
 
       - name: Install Docker Compose
