@@ -36,6 +36,7 @@
     "emailjs-com": "^3.2.0",
     "firebase": "^11.2.0",
     "framer-motion": "^11.15.0",
+    "geoip-lite": "^1.4.10",
     "groq-sdk": "^0.9.1",
     "leaflet-defaulticon-compatibility": "^0.1.2",
     "lucide-react": "^0.416.0",

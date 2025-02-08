@@ -1085,51 +1085,59 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
             input.toLowerCase().includes("appointment") || 
             input.toLowerCase().includes("अपॉइंटमेंट") || 
             input.toLowerCase().includes("बुक")) {
-          
-          // Check memory before starting booking flow
-          const memory = await checkChatMemory();
+
+          const getCurrentCity = async () => {
+            try {
+              const response = await fetch('https://ipapi.co/json/');
+              const data = await response.json();
+              console.log('Current City:', data.city);
+              return data.city;
+            } catch (error) {
+              console.error('Error getting location:', error);
+              return null;
+            }
+          };
+
+          // Get the user's city
+          const userCity = await getCurrentCity();
           const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
           
-          console.log("Checking memory for booking:", memory); // Debug log
-
-          if (memory?.data?.UserName) {
-            console.log("Found username:", memory.data.UserName); // Debug log
-            // Set the name from memory
-            setBookingData(prev => ({ ...prev, name: memory.data.UserName }));
-            
-            if (memory.data.Email) {
-              setBookingData(prev => ({ ...prev, email: memory.data.Email }));
-              
-              if (memory.data.PhoneNumber) {
-                setBookingData(prev => ({ ...prev, phone: memory.data.PhoneNumber }));
-                // Skip directly to doctor selection since we have all initial data
-                setBookingStep(4);
-                await handleDoctorList(messages);
-              } else {
-                // Skip to phone number collection
-                setBookingStep(3);
-                await speak(messages.providePhone);
-                setChatHistory(prev => [...prev, { 
-                  role: "assistant", 
-                  content: messages.providePhone 
-                }]);
-              }
-            } else {
-              // Skip to email collection
-              setBookingStep(2);
-              await speak(messages.provideEmail);
+          if (userCity === "Pune") {
+            // Start normal booking flow
+            startBookingFlow(messages);
+          } else {
+            // Ask for confirmation if not already asked
+            if (!global.askedForBookingConfirmation) {
+              const cityMessage = `You belong to ${userCity} and we have our hospital branches in Pune city. If you still want to book an appointment, please say "yes" or "no".`;
+              await speak(cityMessage);
               setChatHistory(prev => [...prev, { 
                 role: "assistant", 
-                content: messages.provideEmail 
+                content: cityMessage 
               }]);
+              global.askedForBookingConfirmation = true;
+              global.awaitingBookingConfirmation = true;
             }
-          } else {
-            // Only if no name in memory, start from beginning
-            setBookingStep(1);
-            await speak(messages.provideName);
+          }
+        } else if (global.awaitingBookingConfirmation) {
+          // Handle yes/no response
+          if (input.toLowerCase() === "yes") {
+            // Reset flags
+            global.askedForBookingConfirmation = false;
+            global.awaitingBookingConfirmation = false;
+            
+            // Start the booking flow
+            const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
+            startBookingFlow(messages);
+          } else if (input.toLowerCase() === "no") {
+            // Reset flags
+            global.askedForBookingConfirmation = false;
+            global.awaitingBookingConfirmation = false;
+            
+            const thankYouMessage = "Thank you for connecting with us. If you have any health-related queries, feel free to ask.";
+            await speak(thankYouMessage);
             setChatHistory(prev => [...prev, { 
               role: "assistant", 
-              content: messages.provideName 
+              content: thankYouMessage 
             }]);
           }
         } else if (input.toLowerCase().includes("schedule") || 
@@ -1437,7 +1445,18 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
         case 7:
           // Time slot selection logic
           const selectedTime = input.toUpperCase();
-          if (!availableTimeSlots.includes(selectedTime)) {
+          const availableTimeSlots = [
+            "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM", "11:00 AM",
+            "04:00 PM", "04:30 PM", "05:00 PM", "05:30 PM", "06:00 PM"
+          ];
+
+          // Normalize input and available slots for comparison
+          const normalizedInput = selectedTime.replace(/\s+/g, ' ').trim();
+          const isValidSlot = availableTimeSlots.some(slot => 
+            slot.replace(/\s+/g, ' ').trim() === normalizedInput
+          );
+
+          if (!isValidSlot) {
             await speak(messages.invalidTimeSlot);
             setChatHistory(prev => [...prev, { 
               role: "assistant", 
@@ -1446,22 +1465,21 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
             break;
           }
 
-          // Set the selected time slot
-          setBookingData(prev => ({ ...prev, timeSlot: selectedTime }));
+          // Set the selected time slot and continue with booking
+          setBookingData(prev => ({ ...prev, timeSlot: normalizedInput }));
 
           // Prepare booking confirmation
           try {
-            // Prepare the appointment data in the correct format
             const appointmentData = {
               data: {
                 UserName: bookingData.name,
                 Email: bookingData.email,
                 PhoneNumber: bookingData.phone,
-                Time: selectedTime,
+                Time: normalizedInput,
                 Date: bookingData.date,
                 doctor: bookingData.doctorId,
                 symp: localStorage.getItem('currentSymptoms') || "No symptoms recorded",
-              
+                //clinicType: clinicType
               }
             };
 
@@ -2195,6 +2213,48 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
   const handleClose = async () => {
     await clearChatMemory();
     onClose();
+  };
+
+  // Add this helper function to handle the booking flow
+  const startBookingFlow = async (messages) => {
+    const memory = await checkChatMemory();
+    console.log("Checking memory for booking:", memory);
+
+    if (memory?.data?.UserName) {
+      console.log("Found username:", memory.data.UserName);
+      setBookingData(prev => ({ ...prev, name: memory.data.UserName }));
+      
+      if (memory.data.Email) {
+        setBookingData(prev => ({ ...prev, email: memory.data.Email }));
+        
+        if (memory.data.PhoneNumber) {
+          setBookingData(prev => ({ ...prev, phone: memory.data.PhoneNumber }));
+          setBookingStep(4);
+          await handleDoctorList(messages);
+        } else {
+          setBookingStep(3);
+          await speak(messages.providePhone);
+          setChatHistory(prev => [...prev, { 
+            role: "assistant", 
+            content: messages.providePhone 
+          }]);
+        }
+      } else {
+        setBookingStep(2);
+        await speak(messages.provideEmail);
+        setChatHistory(prev => [...prev, { 
+          role: "assistant", 
+          content: messages.provideEmail 
+        }]);
+      }
+    } else {
+      setBookingStep(1);
+      await speak(messages.provideName);
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: messages.provideName 
+      }]);
+    }
   };
 
   return (
