@@ -35,9 +35,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# ml_models
-ml_backend/models/brain_tumor/weights/brain_tumor-best.pt
-ml_backend/models/diabetic_retinopathy/weights/diabetic_retinopathy-best.pt
-ml_backend/models/skin_disease/weights/skin_disease-best.pt
-ml_backend/models/xray_samples/weights/xray_samples-best.pt
 
