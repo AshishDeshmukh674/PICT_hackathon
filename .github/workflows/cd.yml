@@ -48,4 +48,3 @@ jobs:
         run: |
           sudo docker run -d --name pict_backend_live -p 8081:5000 --restart unless-stopped \
           nishchaybhardwaj/pict_backend_live:latest
-
