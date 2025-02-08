@@ -76,4 +76,3 @@ jobs:
 
       - name: Push to Dockerhub
         run: docker push nishchaybhardwaj/pict_backend_live:latest
-
