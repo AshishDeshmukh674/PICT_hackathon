@@ -1,0 +1,18 @@
+version: "3"
+services:
+  pict_backend_live:
+    image: "pict_backend_live"
+    build: .
+    container_name: pict_backend_live
+    restart: unless-stopped
+    privileged: true
+    network_mode: bridge
+    environment:
+      - ENVIRONMENT=prod
+    ports:
+      - "8081:5000"
+    tty: true
+    deploy:
+      resources:
+        limits:
+          memory: 3500M
