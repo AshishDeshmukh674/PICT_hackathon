@@ -27,6 +27,25 @@ const getUserBookingList = (userEmail) =>
     axiosClient.get(`/appointments?filters[Email][$eq]=${userEmail}&populate[doctor][populate][Image][populate][0]=url&populate=*`);
 
 // Book an appointment
+// const bookAppointment = (data) => {
+//     console.log('Received appointment data:', data);
+    
+//     // Ensure the data follows the standardized format
+//     const appointmentData = {
+//         data: {
+//             userName: data.data.userName,
+//             email: data.data.email,
+//             phone: data.data.phone,
+//             date: data.data.date,
+//             time: data.data.time,
+//             doctorId: data.data.doctorId
+//         }
+//     };
+
+//     console.log('Formatted appointment data:', appointmentData);
+//     return axiosClient.post('/appointments', appointmentData);
+// };
+
 const bookAppointment = (data) => axiosClient.post('/appointments', data);
 
 // Fetch appointments for a specific doctor and date

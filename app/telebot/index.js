@@ -27,7 +27,8 @@ const initUserState = (chatId) => {
       phone: "",
       doctorId: "",
       timeSlot: "",
-      date: ""
+      date: "",
+      clinicType: ""
     },
     cancelData: {
       email: "",
@@ -134,33 +135,163 @@ async function handleGeneralChat(chatId, text, state) {
   }
 }
 
+// Add these helper functions at the top
+const getTimeSlotsForDoctor = (doctorId) => {
+    const doctorTimeSlots = {
+        '3': { 
+            morning: [[8, 30], [9, 30]], 
+            evening: [[19, 30], [20, 30]] 
+        },
+        '4': { 
+            morning: [[8, 0], [9, 0]], 
+            evening: [[11, 0], [1, 0]],
+            AfterNoon: [[9, 0], [11, 0]]
+        },
+        '5': { // Special case for ID 5
+            morning: [[8, 30], [11, 0]], 
+            evening: [[19, 0], [21, 0]]
+        },
+        '7': { 
+            morning: [[8, 0], [10, 45]] 
+        }
+    };
+    return doctorTimeSlots[doctorId] || { morning: [[9, 0], [12, 0]], evening: [[13, 0], [18, 0]] };
+};
+
+const formatTime = (date) => {
+  let hours = date.getHours();
+  const minutes = date.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours || 12;
+  const minutesStr = minutes < 10 ? `0${minutes}` : minutes;
+  return `${hours}:${minutesStr} ${ampm}`;
+};
+
+const isSameDay = (d1, d2) => {
+  return d1.getFullYear() === d2.getFullYear() &&
+         d1.getMonth() === d2.getMonth() &&
+         d1.getDate() === d2.getDate();
+};
+
+const getAvailableTimeSlots = async (doctorId, date, clinicType) => {
+    try {
+        const dateStr = date.toLocaleDateString('en-CA');
+        const response = await GlobalApi.getDoctorAppointmentsByDate(doctorId, dateStr);
+        const bookedSlots = response.data.data
+            ? response.data.data.map(appointment => appointment.attributes.Time)
+            : [];
+
+        const timeList = [];
+        const clinicTypeOnly = clinicType.split(" - ")[0];
+        const clinicTypeKey = clinicTypeOnly.toLowerCase().replace(' clinic', '');
+        const doctorSlots = getTimeSlotsForDoctor(doctorId.toString());
+
+        const isToday = isSameDay(date, new Date());
+        const now = new Date();
+        const dayOfWeek = date.getDay();
+
+        // Check if it's Sunday
+        if (dayOfWeek === 0) {
+            return [];
+        }
+
+        // Special handling for doctor ID 5
+        if (doctorId === 5) {
+            if (clinicTypeKey === 'morning' && ![1, 6].includes(dayOfWeek)) {
+                return [];
+            }
+            if (clinicTypeKey === 'evening' && dayOfWeek !== 4) {
+                return [];
+            }
+        }
+
+        // Get time range for the selected clinic type
+        const timeRange = doctorSlots[clinicTypeKey];
+        if (!timeRange) {
+            console.error('No slots found for clinic type:', clinicTypeKey);
+            return [];
+        }
+
+        const [startSlot, endSlot] = timeRange;
+        let [currentHour, currentMinutes] = startSlot;
+        const [endHour, endMinutes] = endSlot;
+
+        while (currentHour < endHour || (currentHour === endHour && currentMinutes < endMinutes)) {
+            const slotTime = new Date(date);
+            slotTime.setHours(currentHour, currentMinutes);
+
+            if (isToday && slotTime <= now) {
+                currentMinutes += 15;
+                if (currentMinutes === 60) {
+                    currentHour++;
+                    currentMinutes = 0;
+                }
+                continue;
+            }
+
+            const formattedTime = formatTime(slotTime);
+            if (!bookedSlots.includes(formattedTime)) {
+                timeList.push(formattedTime);
+            }
+
+            currentMinutes += 15;
+            if (currentMinutes === 60) {
+                currentHour++;
+                currentMinutes = 0;
+            }
+        }
+
+        return timeList;
+    } catch (error) {
+        console.error("Error getting available time slots:", error);
+        throw error;
+    }
+};
+
 // Handle booking flow
 async function handleBookingFlow(chatId, text, state) {
   try {
     switch (state.bookingStep) {
       case 1:
-        state.bookingData.name = text;
+        // Validate name
+        if (text.length < 2) {
+          bot.sendMessage(chatId, "Please provide a valid name (at least 2 characters).");
+          return;
+        }
+        state.bookingData.userName = text;
         state.bookingStep = 2;
         bot.sendMessage(chatId, "Thank you. Now please provide your email address.");
         break;
 
       case 2:
+        // Validate email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(text)) {
+          bot.sendMessage(chatId, "Please provide a valid email address.");
+          return;
+        }
         state.bookingData.email = text;
         state.bookingStep = 3;
         bot.sendMessage(chatId, "Please provide your phone number.");
         break;
 
       case 3:
+        // Validate phone number
+        const phoneRegex = /^\d{10}$/;
+        if (!phoneRegex.test(text)) {
+          bot.sendMessage(chatId, "Please provide a valid 10-digit phone number.");
+          return;
+        }
         state.bookingData.phone = text;
         state.bookingStep = 4;
-        
+
         // Fetch doctor list
         try {
           const response = await GlobalApi.getDoctorList();
-          const doctors = response.data.data;
-          state.availableDoctors = doctors;
+          state.availableDoctors = response.data.data;
           
-          const doctorList = doctors
+          const doctorList = state.availableDoctors
             .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name} (${doc.attributes.Profession})`)
             .join('\n');
           
@@ -173,95 +304,188 @@ async function handleBookingFlow(chatId, text, state) {
         break;
 
       case 4:
-        const selectedDoctorId = text;
-        const doctor = state.availableDoctors.find(d => d.id.toString() === selectedDoctorId);
-        
+        const selectedDoctorId = parseInt(text);
+        const doctor = state.availableDoctors.find(d => d.id === selectedDoctorId);
+
         if (!doctor) {
           bot.sendMessage(chatId, "Invalid doctor ID. Please select a valid doctor from the list.");
           return;
         }
-        
+
         state.bookingData.doctorId = selectedDoctorId;
         state.bookingStep = 5;
-        bot.sendMessage(chatId, "Please provide your preferred appointment date in DD/MM/YYYY format.");
+        bot.sendMessage(chatId, "Please provide your preferred appointment date in YYYY-MM-DD format.");
         break;
 
       case 5:
-        // Validate date format
-        const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+        // Validate date format (YYYY-MM-DD)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
         if (!dateRegex.test(text)) {
-          bot.sendMessage(chatId, "Invalid date format. Please use DD/MM/YYYY format.");
+          bot.sendMessage(chatId, "Invalid date format. Please use YYYY-MM-DD format.");
+          return;
+        }
+
+        // Validate date is in the future
+        const selectedDate = new Date(text);
+        const today = new Date();
+        if (selectedDate < today) {
+          bot.sendMessage(chatId, "Please select a future date.");
           return;
         }
 
         state.bookingData.date = text;
         state.bookingStep = 6;
 
-        // Show clinic types
-        const clinicMessage = `Please choose a clinic type:
+        // Show clinic type options first
+        bot.sendMessage(chatId, `Please choose a clinic type:
 1. Morning Clinic - Ratnamukund Clinic, Warje
 2. Evening Clinic - Ratnamukund Clinic, Warje
 3. AfterNoon Clinic - Shashwat Clinic, Pune
-Please enter the number (1-3) for your choice.`;
-        
-        bot.sendMessage(chatId, clinicMessage);
+Please enter the number (1-3) for your choice.`);
         break;
 
       case 6:
-        const clinicChoice = parseInt(text);
-        if (clinicChoice < 1 || clinicChoice > 3) {
-          bot.sendMessage(chatId, "Please select a valid clinic type (1-3).");
-          return;
+        // Handle clinic type selection
+        const clinicChoice = text.trim();
+        let selectedClinic;
+        
+        if (clinicChoice === '1') {
+            selectedClinic = 'Morning Clinic - Ratnamukund Clinic, Warje';
+        } else if (clinicChoice === '2') {
+            selectedClinic = 'Evening Clinic - Ratnamukund Clinic, Warje';
+        } else if (clinicChoice === '3') {
+            selectedClinic = 'AfterNoon Clinic - Shashwat Clinic, Pune';
+        } else {
+            bot.sendMessage(chatId, "Please select a valid clinic type (1-3).");
+            return;
         }
 
-        // Map clinic choice to time slots
-        const timeSlots = {
-          1: ["9:00 AM", "10:00 AM", "11:00 AM"],
-          2: ["4:00 PM", "5:00 PM", "6:00 PM"],
-          3: ["2:00 PM", "3:00 PM", "4:00 PM"]
-        };
+        try {
+            const selectedDate = new Date(state.bookingData.date);
+            const dayOfWeek = selectedDate.getDay();
 
-        state.availableTimeSlots = timeSlots[clinicChoice];
-        state.bookingStep = 7;
-        bot.sendMessage(chatId, `Available time slots are:\n${state.availableTimeSlots.join('\n')}\nPlease choose a time slot.`);
+            // Check if it's Sunday
+            if (dayOfWeek === 0) {
+                bot.sendMessage(chatId, "Sorry, appointments are not available on Sundays. Please choose another date.");
+                state.bookingStep = 5;
+                return;
+            }
+
+            // Special handling for doctor ID 5
+            if (state.bookingData.doctorId === 5) {
+                const clinicTypeShort = selectedClinic.split(" - ")[0].toLowerCase().replace(' clinic', '');
+                if (clinicTypeShort === 'morning' && ![1, 6].includes(dayOfWeek)) {
+                    bot.sendMessage(chatId, "This doctor only has morning clinic on Mondays and Saturdays. Please choose another date or clinic type.");
+                    return;
+                }
+                if (clinicTypeShort === 'evening' && dayOfWeek !== 4) {
+                    bot.sendMessage(chatId, "This doctor only has evening clinic on Thursdays. Please choose another date or clinic type.");
+                    return;
+                }
+            }
+
+            // Get available time slots
+            const slots = await getAvailableTimeSlots(
+                state.bookingData.doctorId,
+                selectedDate,
+                selectedClinic
+            );
+
+            if (!slots || slots.length === 0) {
+                bot.sendMessage(chatId, "No time slots available for the selected date and clinic type. Please try another date or clinic type.");
+                state.bookingStep = 5;
+                return;
+            }
+
+            state.availableTimeSlots = slots;
+            state.selectedClinic = selectedClinic;
+            bot.sendMessage(chatId, `Available time slots for ${selectedClinic}:\n${slots.join('\n')}\nPlease choose a time slot from the list above.`);
+            state.bookingStep = 7;
+        } catch (error) {
+            console.error('Error getting time slots:', error);
+            bot.sendMessage(chatId, "Sorry, there was an error fetching available time slots. Please try another clinic type or date.");
+            return;
+        }
         break;
 
       case 7:
-        if (!state.availableTimeSlots.includes(text)) {
-          bot.sendMessage(chatId, "Please select a valid time slot from the list provided.");
+        // Validate time format
+        const timeRegex = /^(0?[1-9]|1[0-2]):[0-5][0-9] (AM|PM)$/i;
+        if (!timeRegex.test(text)) {
+          bot.sendMessage(chatId, "Invalid time format. Please use format like '09:00 AM'.");
           return;
         }
 
-        state.bookingData.timeSlot = text;
+        state.bookingData.time = text;
 
-        // Create appointment
         try {
-          await GlobalApi.bookAppointment({
+          // Construct the API request payload
+          const requestData = {
             data: {
-              Name: state.bookingData.name,
+              UserName: state.bookingData.userName,
               Email: state.bookingData.email,
-              Phone: state.bookingData.phone,
+              Time: state.bookingData.time,
               Date: state.bookingData.date,
-              Time: state.bookingData.timeSlot,
-              doctor: state.bookingData.doctorId
+              doctor: state.bookingData.doctorId,
+              PhoneNumber: state.bookingData.phone
             }
-          });
+          };
 
-          bot.sendMessage(chatId, "Your appointment has been successfully booked! You will receive a confirmation message shortly.");
+          console.log('Booking Appointment Payload:', requestData);
+
+          // Book the appointment
+          const response = await axios.post(
+            'https://appointment-booking-strapi.onrender.com/api/appointments',
+            requestData,
+            {
+              headers: {
+                'Authorization': `Bearer ${process.env.NEXT_PUBLIC_STRAPI_API_KEY}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+
+          if (response.data && response.data.data) {
+            // Get doctor name for the WhatsApp message
+            const doctor = state.availableDoctors.find(d => d.id === state.bookingData.doctorId);
+            const doctorName = doctor ? doctor.attributes.Name : 'Unknown Doctor';
+
+            // Prepare form data for WhatsApp message
+            const formData = {
+              user_name: state.bookingData.userName,
+              user_phone: state.bookingData.phone,
+              date: new Date(state.bookingData.date).toLocaleDateString('en-GB'), // Convert to DD/MM/YYYY
+              time: state.bookingData.time,
+              doctorName: doctorName,
+              symptoms: "No symptoms mentioned"
+            };
+
+            // Send WhatsApp message
+            try {
+              await sendWhatsAppMessage(formData);
+              bot.sendMessage(chatId, `✅ Appointment Booked Successfully!\n\n📅 Date: ${state.bookingData.date}\n⏰ Time: ${state.bookingData.time}\n👨‍⚕️ Doctor: ${doctorName}\n\n✉️ WhatsApp confirmation has been sent.`);
+            } catch (whatsappError) {
+              console.error('WhatsApp message error:', whatsappError);
+              bot.sendMessage(chatId, `✅ Appointment Booked Successfully!\n\n📅 Date: ${state.bookingData.date}\n⏰ Time: ${state.bookingData.time}\n👨‍⚕️ Doctor: ${doctorName}\n\n⚠️ Note: WhatsApp confirmation could not be sent.`);
+            }
+          } else {
+            throw new Error('Invalid response from server');
+          }
         } catch (error) {
-          console.error('Booking error:', error);
-          bot.sendMessage(chatId, "Sorry, there was an error booking your appointment. Please try again.");
+          console.error('Booking error:', error.response?.data || error.message);
+          const errorMessage = error.response?.data?.error?.message || "Please try again later.";
+          bot.sendMessage(chatId, `❌ Error booking appointment: ${errorMessage}`);
         }
 
         // Reset booking state
         state.bookingStep = 0;
         state.bookingData = {
-          name: "",
+          userName: "",
           email: "",
           phone: "",
           doctorId: "",
-          timeSlot: "",
-          date: ""
+          date: "",
+          time: ""
         };
         break;
 
@@ -288,7 +512,6 @@ async function handleMeetingFlow(chatId, text, state) {
         state.meetingData.userEmail = text;
         state.meetingStep = 2;
         
-        // Fetch doctor list
         try {
           const response = await GlobalApi.getDoctorList();
           const doctors = response.data.data;
@@ -337,18 +560,50 @@ async function handleMeetingFlow(chatId, text, state) {
         state.meetingData.eventName = `Medical Consultation with Dr. ${state.availableDoctors.find(d => d.id.toString() === state.meetingData.doctorId).attributes.Name}`;
         
         try {
-          await GlobalApi.bookAppointment({
-            data: {
-              Name: state.meetingData.eventName,
-              Email: state.meetingData.userEmail,
-              Date: state.meetingData.selectedDate,
-              Time: state.meetingData.selectedTime,
-              doctor: state.meetingData.doctorId,
-              Type: "Online Meeting"
-            }
+          // Create Zoom meeting
+          const [time, period] = state.meetingData.selectedTime.split(' ');
+          const [hours, minutes] = time.split(':').map(Number);
+          let militaryHours = hours;
+          if (period === 'PM' && hours !== 12) militaryHours += 12;
+          if (period === 'AM' && hours === 12) militaryHours = 0;
+
+          const [day, month, year] = state.meetingData.selectedDate.split('/');
+          const startTime = `${year}-${month}-${day}T${String(militaryHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+
+          const zoomResponse = await axios.post('http://localhost:3000/api/zoom/create-meeting', {
+            topic: state.meetingData.eventName,
+            start_time: startTime,
+            duration: 30
           });
+
+          if (!zoomResponse.data?.join_url) {
+            throw new Error('Invalid Zoom meeting URL');
+          }
+
+          // Save to Firebase
+          const id = Date.now().toString();
+          const db = getFirestore(app);
           
-          bot.sendMessage(chatId, "Your meeting has been successfully scheduled! You will receive a confirmation email shortly.");
+          const meetingDoc = {
+            id,
+            eventName: state.meetingData.eventName,
+            duration: 30,
+            locationType: "Zoom",
+            locationUrl: zoomResponse.data.join_url,
+            selectedDate: `${year}-${month}-${day}`,
+            selectedTime: state.meetingData.selectedTime,
+            themeColor: "#4F46E5",
+            businessId: `/Business/${state.meetingData.userEmail}`,
+            createdBy: state.meetingData.userEmail,
+            createdAt: new Date().toISOString(),
+            doctorId: state.meetingData.doctorId,
+            clinicType: "Evening Clinic",
+            clinicTiming: "8:00 PM - 10:00 PM"
+          };
+
+          await setDoc(doc(db, "MeetingEvent", id), meetingDoc);
+
+          bot.sendMessage(chatId, "Your Zoom meeting has been scheduled successfully!");
         } catch (error) {
           console.error('Meeting scheduling error:', error);
           bot.sendMessage(chatId, "Sorry, there was an error scheduling your meeting. Please try again.");
@@ -433,6 +688,60 @@ async function handleCancellationFlow(chatId, text, state) {
     state.cancelStep = 0;
   }
 }
+
+const sendWhatsAppMessage = async (formData) => {
+  const phoneNumbers = [
+    "+918149623527",
+    // "+919822038877",
+    // "+919764432460",
+  ];
+
+  try {
+    const promises = phoneNumbers.map(async (number) => {
+      const response = await axios.post(
+        `https://graph.facebook.com/v16.0/405802159279444/messages`,
+        {
+          messaging_product: "whatsapp",
+          to: number,
+          type: "template",
+          template: {
+            name: "pict_wp_2",
+            language: { code: "en" },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  { type: "text", text: formData.user_name },  // {{1}}
+                  { type: "text", text: formData.user_phone },  // {{2}}
+                  { type: "text", text: formData.date },  // {{3}}
+                  { type: "text", text: formData.time },  // {{4}}
+                  { type: "text", text: formData.doctorName },  // {{5}}
+                  { type: "text", text: formData.symptoms || "No symptoms mentioned" }  // {{6}}
+                ]
+              }
+            ]
+          }
+        },
+        {
+          headers: {
+            "Authorization": `Bearer EAAE2eCrRWPkBO5IJD2ZCjepnBu16tfITg1aSWXeVuoqMEXWLE0ME2JZAKRNQUeE5T19rKzPltkk5PNuxSfwqnxzRWJtJuoCAqBTJxTANQW7hRnlHvYokTVPVjPccghhJVCBCiKZBlUKAUvnzJmuftZCOesX5uNVIJ94YvaZBBEwKWfFt9BQ1qDjlfZAQ4C7uPZBDQZDZD`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      if (response.status !== 200) {
+        throw new Error(`Failed to send message to ${number}`);
+      }
+    });
+
+    await Promise.all(promises);
+    return "Your message has been sent successfully to all recipients.";
+  } catch (error) {
+    console.error(`Failed to send message: ${error.message}`);
+    throw new Error(`Failed to send message: ${error.message}`);
+  }
+};
 
 // Start the bot
 console.log('Bot is running...'); 
