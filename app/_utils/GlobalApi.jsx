@@ -29,14 +29,14 @@ const getUserBookingList = (userEmail) =>
     axiosClient.get(`/appointments?filters[Email][$eq]=${userEmail}&populate[doctor][populate][Image][populate][0]=url&populate=*`);
 
 // Book an appointment
-const bookAppointment = (data) => {
-    // If symptoms exist in localStorage, add them to the appointment data
-    const symptoms = localStorage.getItem('currentSymptoms');
-    if (symptoms) {
-        data.data.symp = symptoms;
-        localStorage.removeItem('currentSymptoms'); // Clear after using
+const bookAppointment = async (appointmentData) => {
+    try {
+        const response = await axiosClient.post('/appointments', appointmentData);
+        return response.data;
+    } catch (error) {
+        console.error('Error booking appointment:', error);
+        throw error;
     }
-    return axiosClient.post('/appointments', data);
 };
 
 // Fetch appointments for a specific doctor and date

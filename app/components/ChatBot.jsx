@@ -81,6 +81,8 @@ Please enter the number (1-3) for your choice.`,
     cancelError: "There was an error cancelling your appointment. Please try again.",
     provideMeetingEmail: "Please provide your email address to schedule a meeting.",
     invalidEmail: "Please provide a valid email address.",
+    invalidDate: "Please provide a valid date format.",
+    errorFetchingSlots: "There was an error fetching the time slots. Please try again."
   },
   hi: {
     welcome: "नमस्ते! मैं आपका मेडिकल असिस्टेंट हूं। मैं आपकी कैसे मदद कर सकता हूं? आप अपॉइंटमेंट बुक कर सकते हैं या स्वास्थ्य संबंधी प्रश्न पूछ सकते हैं।",
@@ -112,6 +114,8 @@ Please enter the number (1-3) for your choice.`,
     cancelError: "आपका अपॉइंटमेंट रद्द करने में एक त्रुटि हुई। कृपया पुनः प्रयास करें।",
     provideMeetingEmail: "बैठक शेड्यूल करने के लिए कृपया अपना ईमेल पता प्रदान करें।",
     invalidEmail: "कृपया एक वैध ईमेल पता प्रदान करें।",
+    invalidDate: "कृपया एक वैध तिथि प्रदान करें।",
+    errorFetchingSlots: "कृपया समय स्लॉट फेचवाने में एक त्रुटि हुई। कृपया पुनः प्रयास करें।"
   },
   mr: {
     welcome: "नमस्कार! मी तुमचा मेडिकल असिस्टंट आहे. मी तुम्हाला कशी मदत करू शकतो? तुम्ही अपॉइंटमेंट बुक करू शकता किंवा आरोग्याशी संबंधित प्रश्न विचारू शकता.",
@@ -121,6 +125,8 @@ Please enter the number (1-3) for your choice.`,
     // ... Add other Marathi translations
     provideMeetingEmail: "मीटिंग शेड्यूल करण्यासाठी कृपया तुमचा ईमेल पत्ता द्या.",
     invalidEmail: "कृपया वैध ईमेल पत्ता द्या.",
+    invalidDate: "कृपया एक वैध तिथि प्रदान करें।",
+    errorFetchingSlots: "कृपया समय स्लॉट फेचवाने में एक त्रुटि हुई। कृपया पुनः प्रयास करें।"
   },
   gu: {
     welcome: "નમસ્તે! હું તમારો મેડિકલ આસિસ્ટન્ટ છું. હું તમને કેવી રીતે મદદ કરી શકું? તમે એપોઇન્ટમેન્ટ બુક કરી શકો છો અથવા આરોગ્ય સંબંધિત પ્રશ્નો પૂછી શકો છો.",
@@ -130,6 +136,8 @@ Please enter the number (1-3) for your choice.`,
     // ... Add other Gujarati translations
     provideMeetingEmail: "મીટિંગ શેડ્યૂલ કરવા માટે કૃપા કરીને તમારું ઈમેઈલ સરનામું આપો.",
     invalidEmail: "કૃપા કરીને માન્ય ઈમેઈલ સરનામું આપો.",
+    invalidDate: "કૃપા કરીને એક વैધ તિથિ પ્રદાન કરો.",
+    errorFetchingSlots: "કૃપા સમય સ્લોટ ફેચવામાં એક ત્રુટિ હોઈ. કૃપા પુનઃ પ્રયાસ કરો."
   }
 };
 
@@ -580,6 +588,30 @@ const isValidDoctorResponse = (response) => {
          response.data.data.every(doc => doc.id && doc.attributes?.Name);
 };
 
+// Fix the checkChatMemory function
+const checkChatMemory = async () => {
+  try {
+    const response = await fetch('/api/chatMemory');
+    if (!response.ok) throw new Error('Failed to fetch chat memory');
+    const memory = await response.json();
+    return memory; // Return the whole response
+  } catch (error) {
+    console.error('Error fetching chat memory:', error);
+    // Return a default structure if there's an error
+    return {
+      data: {
+        UserName: null,
+        Email: null,
+        Time: null,
+        Date: null,
+        doctor: null,
+        PhoneNumber: null
+      },
+      lastUpdated: null
+    };
+  }
+};
+
 export default function ChatBot({ isOpen, onClose, onOpen }) {
   const [userInput, setUserInput] = useState("");
   const [chatHistory, setChatHistory] = useState([
@@ -1019,13 +1051,53 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
             input.toLowerCase().includes("appointment") || 
             input.toLowerCase().includes("अपॉइंटमेंट") || 
             input.toLowerCase().includes("बुक")) {
-          setBookingStep(1);
+          
+          // Check memory before starting booking flow
+          const memory = await checkChatMemory();
           const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
-          await speak(messages.provideName);
-          setChatHistory(prev => [...prev, { 
-            role: "assistant", 
-            content: messages.provideName 
-          }]);
+          
+          console.log("Checking memory for booking:", memory); // Debug log
+
+          if (memory?.data?.UserName) {
+            console.log("Found username:", memory.data.UserName); // Debug log
+            // Set the name from memory
+            setBookingData(prev => ({ ...prev, name: memory.data.UserName }));
+            
+            if (memory.data.Email) {
+              setBookingData(prev => ({ ...prev, email: memory.data.Email }));
+              
+              if (memory.data.PhoneNumber) {
+                setBookingData(prev => ({ ...prev, phone: memory.data.PhoneNumber }));
+                // Skip directly to doctor selection since we have all initial data
+                setBookingStep(4);
+                await handleDoctorList(messages);
+              } else {
+                // Skip to phone number collection
+                setBookingStep(3);
+                await speak(messages.providePhone);
+                setChatHistory(prev => [...prev, { 
+                  role: "assistant", 
+                  content: messages.providePhone 
+                }]);
+              }
+            } else {
+              // Skip to email collection
+              setBookingStep(2);
+              await speak(messages.provideEmail);
+              setChatHistory(prev => [...prev, { 
+                role: "assistant", 
+                content: messages.provideEmail 
+              }]);
+            }
+          } else {
+            // Only if no name in memory, start from beginning
+            setBookingStep(1);
+            await speak(messages.provideName);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.provideName 
+            }]);
+          }
         } else if (input.toLowerCase().includes("schedule") || 
                    input.toLowerCase().includes("meeting") || 
                    input.toLowerCase().includes("zoom") || 
@@ -1070,11 +1142,17 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
             const doctorType = extractDoctorType(llmResponse);
             if(doctorType) {
               try {
-                const doctorlist_ = await GlobalApi.getDoctorByCategory(doctorType);
-                await speak(doctorlist_);
+                const response = await GlobalApi.getDoctorByCategory(doctorType);
+                // Make sure to convert the response to a string before displaying
+                const doctorListMessage = typeof response === 'string' 
+                  ? response 
+                  : 'Available doctors in this category: ' + 
+                    response.data.data.map(doc => `\n- ${doc.attributes.Name}`).join('');
+                
+                await speak(doctorListMessage);
                 setChatHistory(prev => [...prev, { 
                   role: "assistant", 
-                  content: doctorlist_   
+                  content: doctorListMessage
                 }]);
               } catch (error) {
                 console.error("Error getting doctor list:", error);
@@ -1119,361 +1197,366 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     }
   };
 
+  // Modify handleBookingFlow to correctly check memory
   const handleBookingFlow = async (input) => {
     const messages = TRANSLATIONS[selectedLanguage] || TRANSLATIONS.en;
+    const memory = await checkChatMemory();
     
+    // Log for debugging
+    console.log("Memory data:", memory?.data);
+
     try {
       switch(bookingStep) {
-        case 0:
-          // Check if user is authenticated first
-          if (!currentUser || !currentUser.email) {
-            const errorMsg = "Please log in first to book an appointment.";
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            setBookingStep(0); // Reset booking flow
-            break;
-          }
-          setBookingStep(1);
-          await speak(messages.provideName);
-          setChatHistory(prev => [...prev, { role: "assistant", content: messages.provideName }]);
-          break;
-
         case 1:
-          if (!input.trim()) {
-            const errorMsg = "Please provide a valid name.";
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            break;
+          // Check if UserName exists in memory
+          if (memory?.data?.UserName) {
+            console.log("Found username in memory:", memory.data.UserName);
+            // Use the name from memory
+            setBookingData(prev => ({ ...prev, name: memory.data.UserName }));
+            
+            // Check for email in memory
+            if (memory.data.Email) {
+              setBookingData(prev => ({ ...prev, email: memory.data.Email }));
+              
+              // Check for phone in memory
+              if (memory.data.PhoneNumber) {
+                setBookingData(prev => ({ ...prev, phone: memory.data.PhoneNumber }));
+                setBookingStep(4); // Skip to doctor selection
+                // Show doctor list
+                await handleDoctorList(messages);
+              } else {
+                // Ask for phone number
+                setBookingStep(3);
+                await speak(messages.providePhone);
+                setChatHistory(prev => [...prev, { 
+                  role: "assistant", 
+                  content: messages.providePhone 
+                }]);
+              }
+            } else {
+              // Ask for email
+              setBookingStep(2);
+              await speak(messages.provideEmail);
+              setChatHistory(prev => [...prev, { 
+                role: "assistant", 
+                content: messages.provideEmail 
+              }]);
+            }
+          } else {
+            // If no name in memory, use the provided input
+            setBookingData(prev => ({ ...prev, name: input }));
+            setBookingStep(2);
+            await speak(messages.provideEmail);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.provideEmail 
+            }]);
           }
-          // Set both name and email (from authenticated user)
-          setBookingData(prev => ({ ...prev, name: input }));
-          setBookingStep(2);
-          await speak(messages.provideEmail);
-          setChatHistory(prev => [...prev, { role: "assistant", content: messages.provideEmail }]);
           break;
 
         case 2:
-          setBookingData(prev => ({ ...prev, email: input }));
-          setBookingStep(3);
-          await speak(messages.providePhone);
-          setChatHistory(prev => [...prev, { role: "assistant", content: messages.providePhone }]);
+          if (memory?.Email) {
+            setBookingData(prev => ({ ...prev, email: memory.Email }));
+            setBookingStep(3);
+            if (memory?.PhoneNumber) {
+              setBookingData(prev => ({ ...prev, phone: memory.PhoneNumber }));
+              setBookingStep(4);
+              // Show doctor list
+              await handleDoctorList(messages);
+            } else {
+              await speak(messages.providePhone);
+              setChatHistory(prev => [...prev, { 
+                role: "assistant", 
+                content: messages.providePhone 
+              }]);
+            }
+          } else {
+            // Original email validation logic
+            if (!isValidEmail(input)) {
+              await speak(messages.invalidEmail);
+              setChatHistory(prev => [...prev, { 
+                role: "assistant", 
+                content: messages.invalidEmail 
+              }]);
+              break;
+            }
+            setBookingData(prev => ({ ...prev, email: input }));
+            setBookingStep(3);
+            await speak(messages.providePhone);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.providePhone 
+            }]);
+          }
           break;
 
         case 3:
-          // Clean and validate phone number
-          const phoneNumber = input.replace(/[^0-9]/g, '').replace(/\.+$/, '');
-          if (phoneNumber.length !== 10) {
-            const errorMsg = "Please provide a valid 10-digit phone number.";
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Repeat the phone prompt
-            await speak(messages.providePhone);
-            // Stay on the same step
-            break;
-          }
-          setBookingData(prev => ({ ...prev, phone: phoneNumber }));
-          try {
-            // Fetch doctor list with retry mechanism
-            let retryCount = 0;
-            let doctorsResponse = null;
-            
-            while (retryCount < 3) {
-              try {
-                doctorsResponse = await GlobalApi.getDoctorList();
-                if (isValidDoctorResponse(doctorsResponse)) {
-                  break;
-                }
-                retryCount++;
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
-              } catch (err) {
-                console.error(`Attempt ${retryCount + 1} failed:`, err);
-                retryCount++;
-                if (retryCount === 3) throw err;
-                await new Promise(resolve => setTimeout(resolve, 1000));
-              }
-            }
-
-            if (!isValidDoctorResponse(doctorsResponse)) {
-              throw new Error('Invalid doctor list response');
-            }
-
-            const doctors = doctorsResponse.data.data;
-            setAvailableDoctors(doctors);
-
-            // Create doctor list string
-            const doctorList = doctors
-              .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name}`)
-              .join('\n');
-
-            const doctorPrompt = messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
-            
-            // Log successful doctor list fetch
-            console.log('Successfully fetched doctors:', doctors.length);
-            console.log('Doctor list:', doctorList);
-
-            await speak(doctorPrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: doctorPrompt }]);
-          setBookingStep(4);
-
-          } catch (error) {
-            console.error('Doctor list fetch error:', {
-              error,
-              message: error.message,
-              response: error.response,
-              status: error.response?.status
-            });
-
-            // Handle specific error cases
-            let errorMsg;
-            if (error.response?.status === 404) {
-              errorMsg = "The doctor list service is currently unavailable. Please try again later.";
-            } else if (error.message === 'Invalid doctor list response') {
-              errorMsg = "Unable to retrieve the doctor list. Please try again.";
-            } else {
-              errorMsg = "There was a problem fetching the doctor list. Please try again in a moment.";
-            }
-
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Stay on current step
-            break;
+          if (memory?.PhoneNumber) {
+            setBookingData(prev => ({ ...prev, phone: memory.PhoneNumber }));
+            setBookingStep(4);
+            // Show doctor list
+            await handleDoctorList(messages);
+          } else {
+            // Original phone number logic
+            setBookingData(prev => ({ ...prev, phone: input }));
+            setBookingStep(4);
+            // Show doctor list
+            await handleDoctorList(messages);
           }
           break;
 
         case 4:
-          const processedInput = convertNumberWordsToDigits(input, selectedLanguage);
-          const doctorId = parseInt(processedInput);
-          
-          if (!availableDoctors.some(doc => doc.id === doctorId)) {
-            const errorMsg = messages.invalidDoctorId;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Show doctor list again
-            const doctorList = availableDoctors
-                .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name}`)
-                .join('\n');
-            const doctorPrompt = messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
-            await speak(doctorPrompt);
-            setChatHistory(prev => [...prev, { role: "assistant", content: doctorPrompt }]);
-            // Stay on the same step
-            break;
+          // Check if doctor exists in memory
+          if (memory?.doctor) {
+            setBookingData(prev => ({ ...prev, doctorId: memory.doctor }));
+            setBookingStep(5);
+            await speak(messages.provideDate);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.provideDate 
+            }]);
+          } else {
+            // Original doctor selection logic
+            const doctorId = convertNumberWordsToDigits(input, selectedLanguage);
+            const selectedDoctor = availableDoctors.find(d => d.id.toString() === doctorId);
+            
+            if (!selectedDoctor) {
+              await speak(messages.invalidDoctorId);
+              setChatHistory(prev => [...prev, { 
+                role: "assistant", 
+                content: messages.invalidDoctorId 
+              }]);
+              break;
+            }
+            
+            setBookingData(prev => ({ ...prev, doctorId }));
+            setBookingStep(5);
+            await speak(messages.provideDate);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.provideDate 
+            }]);
           }
-          
-          // If we get here, the doctor ID is valid
-          setBookingData(prev => ({ ...prev, doctorId }));
-          const datePrompt = messages.provideDate;
-          await speak(datePrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: datePrompt }]);
-          setBookingStep(5);
           break;
 
         case 5:
-          const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-          const match = input.match(dateRegex);
-          
-          if (!match) {
-            const errorMsg = messages.invalidDateFormat;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Repeat the date prompt
-            await speak(messages.provideDate);
-            // Stay on the same step
-            break;
+          // Check if date exists in memory
+          if (memory?.Date && memory.Date !== "null") {
+            setBookingData(prev => ({ ...prev, date: memory.Date }));
+            setBookingStep(6);
+            await speak(messages.chooseClinic);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.chooseClinic 
+            }]);
+          } else {
+            // Original date validation logic
+            const dateRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/;
+            if (!dateRegex.test(input)) {
+              await speak(messages.invalidDate);
+              setChatHistory(prev => [...prev, { 
+                role: "assistant", 
+                content: messages.invalidDate 
+              }]);
+              break;
+            }
+
+            setBookingData(prev => ({ ...prev, date: input }));
+            setBookingStep(6);
+            await speak(messages.chooseClinic);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.chooseClinic 
+            }]);
           }
-
-          const [, day, month, year] = match;
-          const selectedDate = new Date(year, month - 1, day);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-
-          if (selectedDate < today) {
-            const errorMsg = messages.futureDateRequired;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Repeat the date prompt
-            await speak(messages.provideDate);
-            // Stay on the same step
-            break;
-          }
-
-          if (selectedDate.getDay() === 0) {
-            const errorMsg = messages.closedSunday;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Repeat the date prompt
-            await speak(messages.provideDate);
-            // Stay on the same step
-            break;
-          }
-
-          setBookingData(prev => ({ ...prev, date: selectedDate.toLocaleDateString('en-CA') }));
-          
-          const clinicPrompt = messages.chooseClinic;
-          await speak(clinicPrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: clinicPrompt }]);
-          setBookingStep(6);
           break;
 
         case 6:
-          const clinicNumberInput = convertNumberWordsToDigits(input, selectedLanguage);
-          const clinicChoice = clinicNumberInput.trim();
-          
-          if (!['1', '2', '3'].includes(clinicChoice)) {
-            const errorMsg = messages.invalidClinic;
-            await speak(errorMsg);
-              setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            await speak(messages.chooseClinic);
+          // Clinic selection logic
+          if (input === "1" || input.toLowerCase().includes("morning")) {
+            setClinicType('Morning Clinic - Ratnamukund Clinic, Warje');
+          } else if (input === "2" || input.toLowerCase().includes("evening")) {
+            setClinicType('Evening Clinic - Ratnamukund Clinic, Warje');
+          } else if (input === "3" || input.toLowerCase().includes("afternoon")) {
+            setClinicType('AfterNoon Clinic - Shashwat Clinic, Pune');
+          } else {
+            await speak(messages.invalidClinic);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.invalidClinic 
+            }]);
             break;
           }
 
-          const selectedClinic = clinicChoice === '1' 
-            ? 'Morning Clinic - Ratnamukund Clinic, Warje'
-            : clinicChoice === '2' 
-            ? 'Evening Clinic - Ratnamukund Clinic, Warje'
-            : 'AfterNoon Clinic - Shashwat Clinic, Pune';
-
-          setClinicType(selectedClinic);
-
+          // Fetch available time slots based on clinic type
           try {
-          const slots = await getAvailableTimeSlots(
-            bookingData.doctorId, 
-            new Date(bookingData.date), 
-            selectedClinic
-          );
-          
-            console.log('Available slots:', slots); // Debug log
-            
-            if (!slots || slots.length === 0) {
-              const noSlotsMsg = messages.noTimeSlots;
-              await speak(noSlotsMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: noSlotsMsg }]);
-              // Show clinic options again
-              await speak(messages.chooseClinic);
-            break;
-          }
-
-            const slotsPrompt = messages.availableSlots.replace('{slots}', slots.join('\n'));
-            await speak(slotsPrompt);
-          setChatHistory(prev => [...prev, { role: "assistant", content: slotsPrompt }]);
-          setAvailableTimeSlots(slots);
-          setBookingStep(7);
+            const timeSlots = [
+              "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM", "11:00 AM",
+              "04:00 PM", "04:30 PM", "05:00 PM", "05:30 PM", "06:00 PM"
+            ];
+            setAvailableTimeSlots(timeSlots);
+            const slotsMessage = messages.availableSlots.replace('{slots}', timeSlots.join('\n'));
+            setBookingStep(7);
+            await speak(slotsMessage);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: slotsMessage 
+            }]);
           } catch (error) {
-            console.error('Error getting time slots:', error);
-            const errorMsg = messages.processingError;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            break;
+            console.error('Error setting time slots:', error);
+            await speak(messages.errorFetchingSlots);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.errorFetchingSlots 
+            }]);
           }
           break;
 
         case 7:
-          const convertedTime = convertTimeExpression(input, selectedLanguage);
-          const selectedTime = convertedTime.trim().toUpperCase();
-          
+          // Time slot selection logic
+          const selectedTime = input.toUpperCase();
           if (!availableTimeSlots.includes(selectedTime)) {
-            const errorMsg = messages.invalidTimeSlot;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-            // Show available slots again
-            const slotsPrompt = messages.availableSlots.replace('{slots}', availableTimeSlots.join('\n'));
-            await speak(slotsPrompt);
-            setChatHistory(prev => [...prev, { role: "assistant", content: slotsPrompt }]);
-            // Stay on the same step
+            await speak(messages.invalidTimeSlot);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.invalidTimeSlot 
+            }]);
             break;
           }
 
-          // Prepare and submit booking
-          const storedSymptoms = localStorage.getItem('currentSymptoms');
-          
-          const appointmentData = {
-            data: {
-              UserName: bookingData.name,
-              Email: bookingData.email,
-              PhoneNumber: bookingData.phone,
-              Time: selectedTime,
-              Date: bookingData.date,
-              doctor: bookingData.doctorId,
-              symp: storedSymptoms || "No symptoms recorded"  // Add symptoms to appointment data
-            }
-          };
-          console.log('Appointment data:', appointmentData);
+          // Set the selected time slot
+          setBookingData(prev => ({ ...prev, timeSlot: selectedTime }));
 
+          // Prepare booking confirmation
           try {
+            // Prepare the appointment data in the correct format
+            const appointmentData = {
+              data: {
+                UserName: bookingData.name,
+                Email: bookingData.email,
+                PhoneNumber: bookingData.phone,
+                Time: selectedTime,
+                Date: bookingData.date,
+                doctor: bookingData.doctorId,
+                symp: localStorage.getItem('currentSymptoms') || "No symptoms recorded",
+                clinicType: clinicType
+              }
+            };
+
+            console.log("Sending appointment data:", appointmentData); // Debug log
+
             // Book the appointment
             await GlobalApi.bookAppointment(appointmentData);
 
-            // Get doctor details for the message
+            // Get doctor details
             const doctorResponse = await GlobalApi.getDoctorById(bookingData.doctorId);
             const doctorName = doctorResponse.data.data.attributes.Name;
 
-            // Prepare form data for the WhatsApp message
-            const formData = {
+            // Prepare WhatsApp message data
+            const whatsappData = {
               user_name: bookingData.name,
               user_phone: bookingData.phone,
-              date: new Date(bookingData.date).toLocaleDateString('en-GB'),
+              date: bookingData.date,
               time: selectedTime,
               doctorName: doctorName,
-              symptoms: storedSymptoms || "No symptoms recorded"  // Include symptoms in formData
+              symptoms: appointmentData.data.symp
             };
 
-            // Send WhatsApp message
-            await sendMessage(formData);
+            // Send WhatsApp notification
+            await sendMessage(whatsappData);
 
-            // Clear stored symptoms after successful booking
+            // Clear stored symptoms
             localStorage.removeItem('currentSymptoms');
 
-            const confirmationMsg = messages.bookingSuccess;
-            await speak(confirmationMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: confirmationMsg }]);
-            setBookingStep(0); // Reset booking flow
+            // Prepare confirmation message
+            const confirmationMessage = `Great! I've booked your appointment with the following details:
+            Name: ${bookingData.name}
+            Email: ${bookingData.email}
+            Phone: ${bookingData.phone}
+            Doctor: ${doctorName}
+            Date: ${bookingData.date}
+            Time: ${selectedTime}
+            Clinic: ${clinicType}
+            Symptoms: ${appointmentData.data.symp}`;
+
+            // Show success messages
+            await speak(messages.bookingSuccess);
+            setChatHistory(prev => [...prev, 
+              { 
+                role: "assistant", 
+                content: confirmationMessage 
+              },
+              { 
+                role: "assistant", 
+                content: messages.bookingSuccess 
+              }
+            ]);
+
+            // Reset booking state
+            setBookingStep(0);
+            setBookingData({
+              name: "",
+              email: "",
+              phone: "",
+              doctorId: "",
+              timeSlot: "",
+              date: ""
+            });
+            setClinicType("");
+            setAvailableTimeSlots([]);
+
           } catch (error) {
-            console.error("Booking failed:", error);
-            const errorMsg = messages.bookingError;
-            await speak(errorMsg);
-            setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
+            console.error('Error completing booking:', error);
+            await speak(messages.bookingError);
+            setChatHistory(prev => [...prev, { 
+              role: "assistant", 
+              content: messages.bookingError 
+            }]);
             setBookingStep(0);
           }
           break;
       }
     } catch (error) {
-      console.error('Error in handleBookingFlow:', error);
-      
-      // Instead of resetting the booking flow, stay on the current step
-      const errorMsg = messages.processingError;
-      await speak(errorMsg);
-      setChatHistory(prev => [...prev, { role: "assistant", content: errorMsg }]);
-      
-      // Repeat the current step's prompt
-      const currentPrompt = getCurrentStepPrompt(bookingStep, messages, availableDoctors, availableTimeSlots);
-      if (currentPrompt) {
-        await speak(currentPrompt);
-        setChatHistory(prev => [...prev, { role: "assistant", content: currentPrompt }]);
-      }
+      console.error('Error in booking flow:', error);
+      await speak(messages.processingError);
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: messages.processingError 
+      }]);
+      setBookingStep(0);
     }
   };
 
-  // Helper function to get the appropriate prompt for the current step
-  const getCurrentStepPrompt = (step, messages, doctors, timeSlots) => {
-    switch(step) {
-      case 1:
-        return messages.provideName;
-      case 2:
-        return messages.provideEmail;
-      case 3:
-        return messages.providePhone;
-      case 4:
-        const doctorList = doctors
-          .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name}`)
-          .join('\n');
-        return messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
-      case 5:
-        return messages.provideDate;
-      case 6:
-        return messages.chooseClinic;
-      case 7:
-        return messages.availableSlots.replace('{slots}', timeSlots.join('\n'));
-      default:
-        return null;
+  // Helper function to handle doctor list fetching and display
+  const handleDoctorList = async (messages) => {
+    try {
+      const doctorsResponse = await GlobalApi.getDoctorList();
+      if (!isValidDoctorResponse(doctorsResponse)) {
+        throw new Error('Invalid doctor list response');
+      }
+      const doctors = doctorsResponse.data.data;
+      setAvailableDoctors(doctors);
+      
+      // Format the doctor list as a string
+      const doctorList = doctors
+        .map(doc => `Doctor ID: ${doc.id} - ${doc.attributes.Name}`)
+        .join('\n');
+      
+      const doctorPrompt = messages.chooseDoctorPrompt.replace('{doctorList}', doctorList);
+      await speak(doctorPrompt);
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: doctorPrompt 
+      }]);
+    } catch (error) {
+      console.error('Error fetching doctors:', error);
+      const errorMessage = "Failed to fetch doctor list. Please try again.";
+      await speak(errorMessage);
+      setChatHistory(prev => [...prev, { 
+        role: "assistant", 
+        content: errorMessage 
+      }]);
+      setBookingStep(0);
     }
   };
 
