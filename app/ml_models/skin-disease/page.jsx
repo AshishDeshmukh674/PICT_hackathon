@@ -1,11 +1,68 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 export default function SkinDiseaseDetection() {
     const [selectedImage, setSelectedImage] = useState(null);
     const [preview, setPreview] = useState(null);
     const [prediction, setPrediction] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
+    const canvasRef = useRef(null);
+    const imageRef = useRef(null);
+    const containerRef = useRef(null);
+
+    const drawPrediction = () => {
+        if (!prediction || !prediction.points) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const image = imageRef.current;
+
+        // Set canvas dimensions to match displayed image
+        canvas.width = image.width;
+        canvas.height = image.height;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Calculate scale factors
+        const scaleX = image.width / image.naturalWidth;
+        const scaleY = image.height / image.naturalHeight;
+
+        // Draw polygon
+        if (prediction.points && prediction.points.length > 0) {
+            ctx.beginPath();
+            ctx.moveTo(
+                prediction.points[0].x * scaleX,
+                prediction.points[0].y * scaleY
+            );
+
+            for (let i = 1; i < prediction.points.length; i++) {
+                ctx.lineTo(
+                    prediction.points[i].x * scaleX,
+                    prediction.points[i].y * scaleY
+                );
+            }
+
+            ctx.closePath();
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+            ctx.fill();
+
+            // Draw prediction text
+            const text = `${prediction.prediction} (${(prediction.confidence * 100).toFixed(2)}%)`;
+            ctx.font = 'bold 16px Arial';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(10, 10, ctx.measureText(text).width + 20, 30);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(text, 20, 30);
+        }
+    };
+
+    useEffect(() => {
+        if (prediction && preview) {
+            drawPrediction();
+        }
+    }, [prediction, preview]);
 
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
@@ -69,22 +126,46 @@ export default function SkinDiseaseDetection() {
                             onClick={handleSubmit}
                             disabled={!selectedImage || isLoading}
                             className={`w-full py-2 px-4 rounded-lg ${!selectedImage || isLoading
-                                    ? 'bg-gray-300'
-                                    : 'bg-blue-500 hover:bg-blue-600'
+                                ? 'bg-gray-300'
+                                : 'bg-blue-500 hover:bg-blue-600'
                                 } text-white transition-colors`}
                         >
                             {isLoading ? 'Analyzing...' : 'Analyze Image'}
                         </button>
                     </div>
 
-                    <div className="space-y-4">
+                    <div ref={containerRef} className="space-y-4">
                         {preview && (
                             <div className="relative flex justify-center">
-                                <img
-                                    src={preview}
-                                    alt="Preview"
-                                    className="max-w-full max-h-[450px] object-contain rounded-lg"
-                                />
+                                <div style={{
+                                    maxWidth: '450px',
+                                    maxHeight: '450px',
+                                    width: '100%',
+                                    position: 'relative'
+                                }}>
+                                    <img
+                                        ref={imageRef}
+                                        src={preview}
+                                        alt="Preview"
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            maxHeight: '450px',
+                                            objectFit: 'contain'
+                                        }}
+                                    />
+                                    <canvas
+                                        ref={canvasRef}
+                                        style={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            width: '100%',
+                                            height: '100%',
+                                            pointerEvents: 'none'
+                                        }}
+                                    />
+                                </div>
                             </div>
                         )}
                         {prediction && !prediction.error && (
