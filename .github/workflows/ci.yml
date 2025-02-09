@@ -22,12 +22,16 @@ jobs:
       - name: Run Tests
         run: npm run test
         
+      - name: Ensure coverage directory exists
+        run: mkdir -p coverage  # Ensures the directory exists before uploading
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: test-results  # Ensure this matches the artifact name in CD
           path: coverage/
+          retention-days: 5  # Ensures artifact does not expire too soon
 
   build:
     needs: test  # This ensures build only runs if tests pass
