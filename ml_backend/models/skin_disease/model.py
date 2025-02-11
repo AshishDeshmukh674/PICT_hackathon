@@ -12,8 +12,33 @@ class SkinDiseaseModel(BaseModel):
                 api_url="https://outline.roboflow.com",
                 api_key="ejX2g8OKP9TO4VxUTvVp"
             )
-            # Replace with your Roboflow skin disease model ID
-            self.model_id = "skin-disease-detection/1"
+            self.model_id = "skin-disease-prediction-1ej1a/6"
+            self.confidence_threshold = 0.4
+            
+            # Updated condition categories based on new model classes
+            self.condition_types = [
+                'Acne-and-Rosacea',
+                "Athlete's-foot",
+                'Chickenmonkey pox',
+                'Cold-Sores',
+                'Contact-Dermatitis',
+                'Eczema',
+                'Hives',
+                'Keratosis pilaris',
+                'Lupus',
+                'Moles',
+                'Psoriasis',
+                'Ringworm',
+                'Shingles',
+                'Skin-cancer-(Basal-cell-carcinoma)',
+                'Skin-cancer-(Melanoma)',
+                'Skin-cancer-(Squamous-cell-carcinoma)',
+                'Vitiligo',
+                'Warts',
+                'cyst',
+                'nail-fungus'
+            ]
+            
             print("Roboflow client initialized successfully")
         except Exception as e:
             print(f"Error initializing Roboflow client: {e}")
@@ -21,33 +46,48 @@ class SkinDiseaseModel(BaseModel):
 
     async def predict(self, file: UploadFile = File(...)):
         try:
-            # Read image data
             image_data = await file.read()
-            
-            # Save temporarily to pass to Roboflow
             temp_path = "temp_image.jpg"
+            
             with open(temp_path, "wb") as f:
                 f.write(image_data)
             
             try:
-                # Make prediction using Roboflow
                 result = self.client.infer(temp_path, model_id=self.model_id)
+                print("API Response:", result)  # Debug print
                 
-                # Process predictions
                 if result and isinstance(result, dict) and 'predictions' in result:
                     predictions = result['predictions']
                     if predictions:
-                        # Get the prediction with highest confidence
-                        best_pred = max(predictions, key=lambda x: x.get('confidence', 0))
+                        # Filter predictions by confidence threshold
+                        valid_predictions = [
+                            pred for pred in predictions 
+                            if pred.get('confidence', 0) > self.confidence_threshold
+                        ]
                         
-                        return {
-                            "prediction": best_pred.get('class', 'Unknown'),
-                            "confidence": best_pred.get('confidence', 0.0)
-                        }
+                        if valid_predictions:
+                            best_pred = max(valid_predictions, key=lambda x: x.get('confidence', 0))
+                            
+                            # Extract all necessary information
+                            return {
+                                "prediction": best_pred.get('class', 'Unknown'),
+                                "confidence": best_pred.get('confidence', 0.0),
+                                "box": [
+                                    best_pred.get('x') - best_pred.get('width')/2,
+                                    best_pred.get('y') - best_pred.get('height')/2,
+                                    best_pred.get('x') + best_pred.get('width')/2,
+                                    best_pred.get('y') + best_pred.get('height')/2
+                                ],
+                                "points": best_pred.get('points', []),
+                                "severity": "high" if "cancer" in best_pred.get('class', '').lower() else "moderate"
+                            }
                 
                 return {
-                    "prediction": "No Disease Detected",
-                    "confidence": 0.0
+                    "prediction": "No specific condition detected",
+                    "confidence": 0.0,
+                    "box": None,
+                    "points": [],
+                    "severity": "low"
                 }
                 
             finally:
@@ -56,4 +96,5 @@ class SkinDiseaseModel(BaseModel):
                 
         except Exception as e:
             print(f"Prediction error: {e}")
+            print(f"Error details: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e)) 

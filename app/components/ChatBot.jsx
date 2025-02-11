@@ -646,6 +646,26 @@ const clearChatMemory = async () => {
   }
 };
 
+const updateChatMemory = async (data) => {
+  try {
+    const response = await fetch('/api/updateChatMemory', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to update chat memory');
+    }
+    
+    console.log('Chat memory updated successfully');
+  } catch (error) {
+    console.error('Error updating chat memory:', error);
+  }
+};
+
 export default function ChatBot({ isOpen, onClose, onOpen }) {
   const [userInput, setUserInput] = useState("");
   const [chatHistory, setChatHistory] = useState([
@@ -1250,6 +1270,15 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
     try {
       switch(bookingStep) {
         case 1:
+          if (!memory?.data?.UserName) {
+            // Update memory when new name is provided
+            await updateChatMemory({
+              data: {
+                ...memory?.data,
+                UserName: input
+              }
+            });
+          }
           // Check if UserName exists in memory
           if (memory?.data?.UserName) {
             console.log("Found username in memory:", memory.data.UserName);
@@ -1297,6 +1326,15 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
           break;
 
         case 2:
+          if (isValidEmail(input)) {
+            // Update memory when valid email is provided
+            await updateChatMemory({
+              data: {
+                ...memory?.data,
+                Email: input
+              }
+            });
+          }
           // Email validation and handling
           if (!isValidEmail(input)) {
             await speak(messages.invalidEmail);
@@ -1328,6 +1366,13 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
           break;
 
         case 3:
+          // Update memory when phone number is provided
+          await updateChatMemory({
+            data: {
+              ...memory?.data,
+              PhoneNumber: input
+            }
+          });
           // This case should only be reached if phone number wasn't in memory
           setBookingData(prev => ({ ...prev, phone: input }));
           setBookingStep(4);
@@ -1370,6 +1415,15 @@ export default function ChatBot({ isOpen, onClose, onOpen }) {
           break;
 
         case 5:
+          if (dateRegex.test(input)) {
+            // Update memory when valid date is provided
+            await updateChatMemory({
+              data: {
+                ...memory?.data,
+                Date: input
+              }
+            });
+          }
           // Check if date exists in memory
           if (memory?.Date && memory.Date !== "null") {
             setBookingData(prev => ({ ...prev, date: memory.Date }));
