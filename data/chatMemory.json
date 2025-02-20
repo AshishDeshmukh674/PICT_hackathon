@@ -1,15 +1,11 @@
 {
   "data": {
-    "UserName": "athrva",
-    "Email": "athrva@gmail.com",
+    "UserName": null,
+    "Email": null,
     "Time": null,
     "Date": null,
     "doctor": null,
-    "PhoneNumber": ""
+    "PhoneNumber": null
   },
-<<<<<<< HEAD
-  "lastUpdated": "2025-02-11T10:24:10.905Z"
-=======
-  "lastUpdated": "2025-02-09T05:14:52.253Z"
->>>>>>> c405ac0ff1b1efb1f6001406e34663d50f4ba53d
+  "lastUpdated": "2025-02-20T09:59:22.399Z"
 }
