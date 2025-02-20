@@ -200,7 +200,7 @@ function BookAppointment({ doctor }) {
                     Time: selectedTimeSlot,
                     Date: dateStr,
                     doctor: doctor.id,
-                    PhoneNumber: phoneNumber,
+                    PhoneNumber: phoneNumber
                 }
             };
     
@@ -233,8 +233,8 @@ function BookAppointment({ doctor }) {
     const sendMessage = async (formData) => {
         const phoneNumbers = [
             "+918149623527",
-            "+919822038877",
-            "+919764432460",
+            // "+919822038877",
+            // "+919764432460",
         ];
     
         try {
@@ -246,7 +246,7 @@ function BookAppointment({ doctor }) {
                         to: number,
                         type: "template",
                         template: {
-                            name: "booking_appointment",
+                            name: "pict_wp_2",
                             language: { code: "en" },
                             components: [
                                 {
@@ -256,7 +256,8 @@ function BookAppointment({ doctor }) {
                                         { type: "text", text: formData.user_phone },  // {{2}}
                                         { type: "text", text: formData.date },  // {{3}}
                                         { type: "text", text: formData.time },  // {{4}}
-                                        { type: "text", text: formData.doctorName }  // {{5}}
+                                        { type: "text", text: formData.doctorName },  // {{5}}
+                                        { type: "text", text: "No symptoms mentioned" }   // {{6}}
                                     ]
                                 }
                             ]

@@ -542,7 +542,7 @@ const sendMessage = async (formData) => {
           to: number,
           type: "template",
           template: {
-            name: "pict_wp",
+            name: "pict_wp_2",
             language: { code: "en" },
             components: [
               {
