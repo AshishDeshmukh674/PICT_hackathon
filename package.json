@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "next-dev": "next dev",
-    "dev": "next dev",
+    "dev": "concurrently \"next dev\" \"python -m uvicorn src.main:app --reload --port 8000\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -28,8 +28,7 @@
     "@react-email/components": "^0.0.32",
     "@react-email/render": "^1.0.4",
     "@strapi/plugin-upload": "^4.25.17",
-    "@tensorflow/tfjs": "^4.22.0",
-    "@tensorflow/tfjs-node": "^4.22.0",
+    "@tensorflow/tfjs": "^4.15.0",
     "@types/pdf-parse": "^1.1.4",
     "@types/react": "^19.0.1",
     "@types/react-dropzone": "^4.2.2",
@@ -66,10 +65,10 @@
     "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
-    "tesseract.js": "^4.1.4"
+    "tesseract.js": "^4.1.4",
+    "concurrently": "^8.0.1"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2",
     "eslint": "^8",
     "eslint-config-next": "14.2.5",
     "postcss": "^8",
@@ -86,6 +85,8 @@
     "whatwg-fetch": "^3.6.2",
     "@babel/core": "^7.x",
     "@babel/preset-env": "^7.x",
-    "babel-jest": "^29.x"
+    "babel-jest": "^29.x",
+    "uvicorn": "^0.24.0",
+    "fastapi": "^0.104.1"
   }
 }
