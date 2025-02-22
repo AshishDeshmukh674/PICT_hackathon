@@ -1,0 +1,72 @@
+{
+    "diabetic_retinopathy": {
+        "prediction": "Mild",
+        "confidence": 0.8374568223953247
+    },
+    "diabetic_retinopathy_annotated": "output/annotated_images/diabetic_retinopathy_image_3_1.png",
+    "xray": {
+        "predictions": [
+            {
+                "prediction": "0- lungs",
+                "confidence": 0.9440104961395264,
+                "bbox": {
+                    "x": 355.5,
+                    "y": 332.5,
+                    "width": 479.0,
+                    "height": 607.0
+                }
+            },
+            {
+                "prediction": "1- left lung",
+                "confidence": 0.9392461776733398,
+                "bbox": {
+                    "x": 225.5,
+                    "y": 340.5,
+                    "width": 215.0,
+                    "height": 569.0
+                }
+            },
+            {
+                "prediction": "2- right lung",
+                "confidence": 0.9244049191474915,
+                "bbox": {
+                    "x": 474.0,
+                    "y": 326.0,
+                    "width": 250.0,
+                    "height": 580.0
+                }
+            },
+            {
+                "prediction": "4- collarbone left",
+                "confidence": 0.8957634568214417,
+                "bbox": {
+                    "x": 171.0,
+                    "y": 114.0,
+                    "width": 248.0,
+                    "height": 94.0
+                }
+            },
+            {
+                "prediction": "3- heart",
+                "confidence": 0.8571778535842896,
+                "bbox": {
+                    "x": 393.0,
+                    "y": 405.0,
+                    "width": 212.0,
+                    "height": 364.0
+                }
+            },
+            {
+                "prediction": "6- humeral left",
+                "confidence": 0.8025819063186646,
+                "bbox": {
+                    "x": 596.5,
+                    "y": 185.5,
+                    "width": 87.0,
+                    "height": 345.0
+                }
+            }
+        ]
+    },
+    "xray_annotated": "output/annotated_images/xray_image_3_1.png"
+}
