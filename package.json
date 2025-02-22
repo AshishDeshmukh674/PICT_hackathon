@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "next-dev": "next dev",
     "dev": "next dev",
+    "fastapi": "cd app/google_fit && python -m uvicorn google_fit_api:app --port 8001",
+    "kill-fastapi": "powershell -Command \"Get-Process -Id (Get-NetTCPConnection -LocalPort 8001).OwningProcess | Stop-Process -Force\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -37,6 +38,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
+    "concurrently": "^8.0.1",
     "date-fns": "^3.6.0",
     "emailjs-com": "^3.2.0",
     "firebase": "^11.2.0",
@@ -65,8 +67,7 @@
     "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
-    "tesseract.js": "^4.1.4",
-    "concurrently": "^8.0.1"
+    "tesseract.js": "^4.1.4"
   },
   "devDependencies": {
     "eslint": "^8",
@@ -85,8 +86,6 @@
     "whatwg-fetch": "^3.6.2",
     "@babel/core": "^7.x",
     "@babel/preset-env": "^7.x",
-    "babel-jest": "^29.x",
-    "uvicorn": "^0.24.0",
-    "fastapi": "^0.104.1"
+    "babel-jest": "^29.x"
   }
 }

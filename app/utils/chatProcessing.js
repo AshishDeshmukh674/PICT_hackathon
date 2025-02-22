@@ -1,5 +1,3 @@
-import tf from '../utils/tensorflow';
-
 // Replace any tfnode imports with browser version
 export const processExtractedText = async (text, fileType) => {
   // Your processing logic here

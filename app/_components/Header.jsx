@@ -145,8 +145,9 @@ function Header() {
               { id: 1, name: "Home", path: "/" },
               { id: 2, name: "Explore", path: "/#category-search" },
               { id: 3, name: "Contact", path: "/#Contact-us" },
+              { id: 4, name: "Google Fit", path: "/google_fit" },
               {
-                id: 4,
+                id: 5,
                 name: "More",
                 subItems: [
                   { id: 'stats', name: "Stats", path: "/stats" },
