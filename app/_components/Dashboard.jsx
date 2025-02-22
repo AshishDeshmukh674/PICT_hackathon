@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
 import { Alert, AlertDescription } from '../../components/ui/alert';
 import { Activity, Heart } from 'lucide-react';
+import { initializeNotifications, sendHealthAlert } from '../services/notificationService';
 
 const HealthMonitoringDashboard = () => {
   const [currentMetrics, setCurrentMetrics] = useState({
@@ -12,6 +13,7 @@ const HealthMonitoringDashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [notificationsSupported, setNotificationsSupported] = useState(true);
   const [riskFactors, setRiskFactors] = useState([]);
   const [keyFindings, setKeyFindings] = useState([]);
 
@@ -45,6 +47,32 @@ const HealthMonitoringDashboard = () => {
 
     fetchMetricsData();
   }, []);
+
+  useEffect(() => {
+    // Initialize notifications when component mounts
+    const setupNotifications = async () => {
+      try {
+        const token = await initializeNotifications();
+        setNotificationsSupported(!!token);
+      } catch (error) {
+        console.error('Failed to initialize notifications:', error);
+        setNotificationsSupported(false);
+      }
+    };
+    setupNotifications();
+  }, []);
+
+  // Add notification effect when critical values are detected
+  useEffect(() => {
+    if (!notificationsSupported) return;
+
+    if (currentMetrics.bloodPressure.includes('140')) {
+      sendHealthAlert("High blood pressure detected. Please consult your healthcare provider.");
+    }
+    if (parseInt(currentMetrics.heartRate) > 100) {
+      sendHealthAlert("Elevated heart rate detected. Monitor your condition closely.");
+    }
+  }, [currentMetrics, notificationsSupported]);
 
   // Render metric card
   const MetricCard = ({ title, value, icon }) => (
