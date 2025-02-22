@@ -53,12 +53,12 @@ const HealthMonitoringDashboard = () => {
           },
           params: {
             'populate': '*',
-            // 'filters[Email][$eq]': userEmail,
+            'filters[Email][$eq]': userEmail,
             'sort[0]': 'Date:desc',
           },
         });
 
-        console.log('Full API Response:', response.data);
+        console.log('Full API Response:', response);
 
         if (response.data.data && response.data.data.length > 0) {
           console.log('Raw data from API:', response.data.data);
