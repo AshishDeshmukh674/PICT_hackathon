@@ -1,7 +1,0 @@
-{
-    "diabetic_retinopathy": {
-        "prediction": "Mild",
-        "confidence": 0.7576443552970886
-    },
-    "diabetic_retinopathy_annotated": "output\\annotated_images\\diabetic_retinopathy_image_5_2.png"
-}

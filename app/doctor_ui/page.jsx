@@ -15,8 +15,6 @@ const DoctorAppointments = () => {
   const [patientSymptoms, setPatientSymptoms] = useState({});
   const [meetingEvents, setMeetingEvents] = useState([]);
   const [doctorId, setDoctorId] = useState(null);
-  const [pdfFile, setPdfFile] = useState(null);
-  const [pdfUploading, setPdfUploading] = useState(false);
 
   // Fetch doctor's name from localStorage when the component mounts
   useEffect(() => {
@@ -193,7 +191,6 @@ const DoctorAppointments = () => {
           `http://localhost:1337/api/appointments?filters[Email][$eq]=${patientEmail}&populate=*`
         );
         const matchingAppointments = appointmentsResponse.data.data;
-        console.log("appointmentsResponse is : ",appointmentsResponse);
 
         // Step 4: Update all matching appointments with the uploaded document
         const updatePromises = matchingAppointments.map(async (appointment) => {
@@ -247,120 +244,6 @@ const DoctorAppointments = () => {
       console.error("Error uploading file:", error);
       alert("Error uploading document.");
       setUploading(false);
-    }
-  };
-
-  // Handle PDF file selection
-  const handlePdfChange = (e) => {
-    setPdfFile(e.target.files[0]);
-  };
-
-  // Handle PDF upload and analysis
-  const handlePdfUpload = async (appointmentId) => {
-    if (!pdfFile) {
-      alert("Please select a PDF file first.");
-      return;
-    }
-
-    setPdfUploading(true);
-    const formData = new FormData();
-    formData.append("file", pdfFile);
-
-    try {
-      // Step 1: Get appointment details to get the patient's email
-      const appointmentResponse = await axios.get(
-        `${process.env.NEXT_PUBLIC_STRAPI_URL}/api/appointments/${appointmentId}?populate=*`
-      );
-      
-      const patientEmail = appointmentResponse.data.data.attributes.Email;
-      console.log("Processing PDF for patient email:", patientEmail);
-
-      // Step 2: Upload and analyze PDF with FastAPI
-      const analysisResponse = await axios.post("http://localhost:8000/upload/", formData);
-      console.log("PDF Analysis Response:", analysisResponse.data);
-
-      if (!analysisResponse.data.metrics) {
-        throw new Error("No metrics found in analysis");
-      }
-
-      // Step 3: Extract and format metrics
-      const metrics = analysisResponse.data.metrics;
-      const bloodPressure = metrics.blood_pressure?.split(" ")[0] || null;
-      const heartRate = metrics.heart_rate?.split(" ")[0] || null;
-
-      console.log("Extracted metrics:", { bloodPressure, heartRate });
-
-      // Step 4: Find the patient's dashboard entry
-      const dashboardResponse = await axios.get(
-        `${process.env.NEXT_PUBLIC_STRAPI_URL}/api/patient-dashboards?filters[Email][$eq]=${patientEmail}&populate=*`
-      );
-
-      if (dashboardResponse.data.data.length === 0) {
-        // Create new dashboard entry if none exists
-        const createResponse = await axios.post(
-          `${process.env.NEXT_PUBLIC_STRAPI_URL}/api/patient-dashboards`,
-          {
-            data: {
-              Email: patientEmail,
-              BloodPresure: bloodPressure,
-              HeartRate: heartRate,
-              Date: new Date().toISOString().split('T')[0]
-            }
-          }
-        );
-        console.log("Created new dashboard entry:", createResponse.data);
-      } else {
-        // Update existing dashboard entry
-        const dashboardId = dashboardResponse.data.data[0].id;
-        const updateResponse = await axios.put(
-          `${process.env.NEXT_PUBLIC_STRAPI_URL}/api/patient-dashboards/${dashboardId}`,
-          {
-            data: {
-              BloodPresure: bloodPressure,
-              HeartRate: heartRate,
-              Date: new Date().toISOString().split('T')[0]
-            }
-          }
-        );
-        console.log("Updated dashboard entry:", updateResponse.data);
-      }
-
-      // Step 5: Store the PDF in Strapi's media library
-      const pdfFormData = new FormData();
-      pdfFormData.append('files', pdfFile);
-      
-      const uploadResponse = await axios.post(
-        `${process.env.NEXT_PUBLIC_STRAPI_URL}/api/upload`,
-        pdfFormData
-      );
-
-      // Step 6: Link the uploaded PDF to the appointment
-      if (uploadResponse.data && uploadResponse.data[0]) {
-        const fileId = uploadResponse.data[0].id;
-        await axios.put(
-          `${process.env.NEXT_PUBLIC_STRAPI_URL}/api/appointments/${appointmentId}`,
-          {
-            data: {
-              document: fileId
-            }
-          }
-        );
-      }
-
-      alert("PDF processed and metrics updated successfully!");
-      setPdfFile(null);
-
-      // Refresh appointments data
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_STRAPI_URL}/api/appointments?filters[Doctor][$eq]=${loggedInDoctor}&populate=*`
-      );
-      setAppointments(response.data.data);
-
-    } catch (error) {
-      console.error("Error details:", error.response?.data || error.message);
-      alert(`Error processing PDF: ${error.message}`);
-    } finally {
-      setPdfUploading(false);
     }
   };
 
@@ -467,39 +350,18 @@ const DoctorAppointments = () => {
                               {uploading ? "Uploading..." : "Upload Document"}
                             </button>
                           </div>
-                        ) : (
-                          <div className="space-y-2">
-                            {/* PDF Upload Section */}
-                            <div>
-                              <input
-                                type="file"
-                                accept=".pdf"
-                                onChange={handlePdfChange}
-                                disabled={pdfUploading}
-                                className="mt-2"
-                              />
-                              <button
-                                onClick={() => handlePdfUpload(appointment.id)}
-                                className="w-full mt-2 bg-blue-500 text-white py-1 rounded-md"
-                                disabled={pdfUploading || !pdfFile}
-                              >
-                                {pdfUploading ? "Processing..." : "Upload & Analyze PDF"}
-                              </button>
-                            </div>
-                            
-                            {/* Existing Document Download Section */}
-                            {appointment.attributes.document?.data && (
-                              <div>
-                                <button
-                                  onClick={() => handleDownload(appointment.attributes.document)}
-                                  className="text-blue-600 hover:text-blue-800"
-                                >
-                                  Download Documents ({Array.isArray(appointment.attributes.document.data) ? 
-                                    appointment.attributes.document.data.length : 0})
-                                </button>
-                              </div>
-                            )}
+                        ) : appointment.attributes.document?.data ? (
+                          <div>
+                            <button
+                              onClick={() => handleDownload(appointment.attributes.document)}
+                              className="text-blue-600 hover:text-blue-800"
+                            >
+                              Download Documents ({Array.isArray(appointment.attributes.document.data) ? 
+                                appointment.attributes.document.data.length : 0})
+                            </button>
                           </div>
+                        ) : (
+                          "No Documents"
                         )}
                       </td>
                     </tr>
