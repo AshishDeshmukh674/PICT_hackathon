@@ -73,5 +73,5 @@
             }
         ]
     },
-    "xray_annotated": "output/annotated_images/xray_image_4_1.png"
+    "xray_annotated": "output\\annotated_images\\xray_image_4_1.png"
 }

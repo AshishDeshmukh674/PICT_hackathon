@@ -1,9 +1,9 @@
 {
     "diabetic_retinopathy": {
         "prediction": "Mild",
-        "confidence": 0.8374568223953247
+        "confidence": 0.8374568819999695
     },
-    "diabetic_retinopathy_annotated": "output/annotated_images/diabetic_retinopathy_image_3_1.png",
+    "diabetic_retinopathy_annotated": "output\\annotated_images\\diabetic_retinopathy_image_3_1.png",
     "xray": {
         "predictions": [
             {
@@ -68,5 +68,5 @@
             }
         ]
     },
-    "xray_annotated": "output/annotated_images/xray_image_3_1.png"
+    "xray_annotated": "output\\annotated_images\\xray_image_3_1.png"
 }
