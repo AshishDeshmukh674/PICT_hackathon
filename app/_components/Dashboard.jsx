@@ -1,9 +1,12 @@
 "use client"
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
 import { Alert, AlertDescription } from '../../components/ui/alert';
-import { Activity, Heart } from 'lucide-react';
+import { Activity, Heart, ArrowUpCircle, ArrowDownCircle, TrendingUp } from 'lucide-react';
+import { useKindeBrowserClient } from '@kinde-oss/kinde-auth-nextjs';
+import axios from 'axios';
+import { sendPushbulletNotification, checkMetricThreshold } from '../services/notificationService';
 
 const HealthMonitoringDashboard = () => {
   const [currentMetrics, setCurrentMetrics] = useState({
@@ -12,7 +15,7 @@ const HealthMonitoringDashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [notificationsSupported, setNotificationsSupported] = useState(true);
+  const [pushbulletToken, setPushbulletToken] = useState(null);
   const [riskFactors, setRiskFactors] = useState([]);
   const [keyFindings, setKeyFindings] = useState([]);
   const [userEmail, setUserEmail] = useState(null);
@@ -22,6 +25,7 @@ const HealthMonitoringDashboard = () => {
     riskLevel: 'NA',
     progress: 'NA'
   });
+  const [healthData, setHealthData] = useState([]);
   const [historicalData, setHistoricalData] = useState([]);
   const [comparison, setComparison] = useState({
     bloodPressure: { trend: 'stable', change: 0 },
@@ -29,6 +33,16 @@ const HealthMonitoringDashboard = () => {
     progress: { trend: 'stable', change: 0 }
   });
   const { user } = useKindeBrowserClient();
+  const defaultToken = process.env.PUSHBULLET_ACCESS_TOKEN;
+
+  // Health metric thresholds
+  const healthThresholds = {
+    systolicHigh: 140,
+    diastolicHigh: 90,
+    bloodPressureHigh: 140,
+    heartRateHigh: 100,
+    heartRateLow: 50
+  };
 
   // Render metric card with trend
   const MetricCard = ({ title, value, icon, trend, change, unit }) => (
@@ -58,9 +72,48 @@ const HealthMonitoringDashboard = () => {
     </Card>
   );
 
+  // Set user email from Kinde auth
+  useEffect(() => {
+    if (user) {
+      setUserEmail(user.email);
+    }
+  }, [user]);
+
+  // Load Pushbullet token from localStorage, user settings, or environment variable
+  useEffect(() => {
+    // Try to get token from localStorage first
+    const savedToken = localStorage.getItem('pushbulletToken');
+    
+    if (savedToken) {
+      setPushbulletToken(savedToken);
+    } else if (defaultToken) {
+      // If no saved token but we have a default token in env vars, use that
+      setPushbulletToken(defaultToken);
+      // Optionally save the default token to localStorage
+      localStorage.setItem('pushbulletToken', defaultToken);
+    } else if (userEmail) {
+      // As a last resort, try to fetch from user settings in backend
+      const fetchPushbulletToken = async () => {
+        try {
+          const response = await axios.get(`/api/user-settings?email=${userEmail}`);
+          if (response.data.pushbulletToken) {
+            setPushbulletToken(response.data.pushbulletToken);
+            localStorage.setItem('pushbulletToken', response.data.pushbulletToken);
+          }
+        } catch (error) {
+          console.error('Error fetching Pushbullet token:', error);
+        }
+      };
+      
+      fetchPushbulletToken();
+    }
+  }, [userEmail, defaultToken]);
+
   // Update to use Kinde authentication
   useEffect(() => {
-    const fetchMetricsData = async () => {
+    const fetchHealthData = async () => {
+      if (!userEmail) return;
+      
       try {
         setLoading(true);
         const response = await axios.get(`${process.env.NEXT_PUBLIC_STRAPI_URL}/api/patient-dashboards`, {
@@ -116,58 +169,34 @@ const HealthMonitoringDashboard = () => {
       }
     };
 
-    fetchHealthData();
+    if (userEmail) {
+      fetchHealthData();
+    }
   }, [userEmail]);
 
+  // Check for health alerts and send Pushbullet notifications
   useEffect(() => {
-    // Initialize notifications when component mounts
-    const setupNotifications = async () => {
-      try {
-        const token = await initializeNotifications();
-        setNotificationsSupported(!!token);
-      } catch (error) {
-        console.error('Failed to initialize notifications:', error);
-        setNotificationsSupported(false);
-      }
-    };
-    setupNotifications();
-  }, []);
-
-  // Add notification effect when critical values are detected
-  useEffect(() => {
-    if (!notificationsSupported) return;
-
-    if (currentMetrics.bloodPressure.includes('140')) {
-      sendHealthAlert("High blood pressure detected. Please consult your healthcare provider.");
+    // We can now call sendPushbulletNotification without explicitly passing a token
+    // It will use the user's token if available, or fall back to the default token
+    if (!currentMetrics) return;
+    
+    // Check if any metrics exceed thresholds
+    const alerts = checkMetricThreshold(currentMetrics, healthThresholds);
+    
+    // Send Pushbullet notification for each alert
+    alerts.forEach(async (alert) => {
+      await sendPushbulletNotification(
+        alert.title,
+        alert.message,
+        pushbulletToken
+      );
+    });
+    
+    // Update UI with alerts
+    if (alerts.length > 0) {
+      setRiskAlerts(prev => [...prev, ...alerts.map(a => a.message)]);
     }
-    if (parseInt(currentMetrics.heartRate) > 100) {
-      sendHealthAlert("Elevated heart rate detected. Monitor your condition closely.");
-    }
-  }, [currentMetrics, notificationsSupported]);
-
-  // Update health recommendations and risk alerts
-  useEffect(() => {
-    const updateHealthData = async () => {
-      if (currentMetrics.bloodPressure === 'NA') return;
-
-      try {
-        const aiResponse = await generateHealthTask(currentMetrics);
-        console.log('AI Response:', aiResponse);
-
-        setRiskAlerts(aiResponse.alerts || []);
-        setHealthRecommendations(aiResponse.dietPlan || null);
-        setCalculatedMetrics(aiResponse.calculatedMetrics || {
-          riskLevel: 'NA',
-          progress: 'NA'
-        });
-
-      } catch (error) {
-        console.error('Error updating health data:', error);
-      }
-    };
-
-    updateHealthData();
-  }, [currentMetrics]);
+  }, [currentMetrics, pushbulletToken]);
 
   // Process historical data and calculate trends
   useEffect(() => {
@@ -274,19 +303,105 @@ const HealthMonitoringDashboard = () => {
 
   return (
     <div className="w-full max-w-6xl mx-auto p-4 space-y-6">
+      {/* Pushbullet Token Input - only show if no default token is available */}
+      {!pushbulletToken && (
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle>Set Up Smartwatch Notifications</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <p className="text-sm text-gray-700">
+                Enter your Pushbullet Access Token to receive health alerts on your smartwatch.
+                <a href="https://www.pushbullet.com/#settings/account" 
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   className="text-blue-500 ml-1">
+                  Get your token here
+                </a>
+              </p>
+              <div className="flex space-x-2">
+                <input 
+                  type="text" 
+                  placeholder="Pushbullet Access Token" 
+                  className="flex-1 px-3 py-2 border rounded-md"
+                  onChange={(e) => {
+                    const token = e.target.value.trim();
+                    if (token) {
+                      setPushbulletToken(token);
+                      localStorage.setItem('pushbulletToken', token);
+                    }
+                  }}
+                />
+                <button 
+                  className="px-4 py-2 bg-blue-500 text-white rounded-md"
+                  onClick={() => {
+                    sendPushbulletNotification(
+                      "Test Notification", 
+                      "Your smartwatch notifications are working!", 
+                      pushbulletToken
+                    );
+                  }}
+                >
+                  Test
+                </button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Show a "Test Notification" button if we already have a token */}
+      {pushbulletToken && (
+        <div className="flex justify-end mb-4">
+          <button 
+            className="px-4 py-2 bg-blue-500 text-white rounded-md text-sm"
+            onClick={() => {
+              sendPushbulletNotification(
+                "Test Notification", 
+                "Your smartwatch notifications are working!", 
+                pushbulletToken
+              );
+            }}
+          >
+            Test Notification
+          </button>
+        </div>
+      )}
+
       {/* Metric Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <MetricCard 
           title="Blood Pressure" 
           value={currentMetrics.bloodPressure}
           icon={<Activity className="h-4 w-4 text-red-500" />}
+          trend={comparison.bloodPressure}
+          unit=""
         />
         <MetricCard 
           title="Heart Rate" 
           value={currentMetrics.heartRate}
           icon={<Heart className="h-4 w-4 text-pink-500" />}
+          trend={comparison.heartRate}
+          unit="bpm"
         />
       </div>
+
+      {/* Risk Alerts */}
+      {riskAlerts.length > 0 && (
+        <Card className="border-red-300 bg-red-50">
+          <CardHeader>
+            <CardTitle className="text-red-700">Health Alerts</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="list-disc pl-5 space-y-1">
+              {riskAlerts.map((alert, index) => (
+                <li key={index} className="text-sm text-red-700">{alert}</li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Risk Factors */}
       <Card>
@@ -295,9 +410,13 @@ const HealthMonitoringDashboard = () => {
         </CardHeader>
         <CardContent>
           <ul className="list-disc pl-5 space-y-1">
-            {riskFactors.map((factor, index) => (
-              <li key={index} className="text-sm text-gray-700">{factor}</li>
-            ))}
+            {riskFactors.length > 0 ? (
+              riskFactors.map((factor, index) => (
+                <li key={index} className="text-sm text-gray-700">{factor}</li>
+              ))
+            ) : (
+              <li className="text-sm text-gray-500">No risk factors identified</li>
+            )}
           </ul>
         </CardContent>
       </Card>
@@ -309,25 +428,19 @@ const HealthMonitoringDashboard = () => {
         </CardHeader>
         <CardContent>
           <ul className="list-disc pl-5 space-y-1">
-            {keyFindings.map((finding, index) => (
-              <li key={index} className="text-sm text-gray-700">{finding}</li>
-            ))}
+            {keyFindings.length > 0 ? (
+              keyFindings.map((finding, index) => (
+                <li key={index} className="text-sm text-gray-700">{finding}</li>
+              ))
+            ) : (
+              <li className="text-sm text-gray-500">No key findings available</li>
+            )}
           </ul>
         </CardContent>
       </Card>
 
-      {/* Alerts for Critical Values */}
-      {(currentMetrics.bloodPressure.includes('140') || 
-        parseInt(currentMetrics.heartRate) > 100) && (
-        <Alert variant="destructive">
-          <AlertDescription>
-            {currentMetrics.bloodPressure.includes('140') && 
-              "High blood pressure detected. Please consult your healthcare provider."}
-            {parseInt(currentMetrics.heartRate) > 100 && 
-              " Elevated heart rate detected. Monitor your condition closely."}
-          </AlertDescription>
-        </Alert>
-      )}
+      {/* Charts */}
+      {renderCharts()}
     </div>
   );
 };
