@@ -233,8 +233,8 @@ function BookAppointment({ doctor }) {
     const sendMessage = async (formData) => {
         const phoneNumbers = [
             "+918149623527",
-            "+919822038877",
-            "+919764432460",
+            // "+919822038877",
+            // "+919764432460",
         ];
     
         try {

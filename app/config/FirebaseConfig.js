@@ -2,15 +2,8 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import dotenv from 'dotenv';
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Load environment variables
-dotenv.config();
 
 // Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyD3tHwz8-6MBuj6b2EI3QMNuYwIP8AXfig", // Use direct value since it's public
   authDomain: "pict-hackathon-2e532.firebaseapp.com",
@@ -22,10 +15,12 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-export const app = initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase Authentication
-export const auth = getAuth(app);
+const auth = getAuth(app);
 
 // Initialize Firestore
-export const db = getFirestore(app);
+const db = getFirestore(app);
+
+export { app, auth, db };
