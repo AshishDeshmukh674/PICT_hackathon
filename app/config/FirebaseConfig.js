@@ -5,13 +5,13 @@ import { getFirestore } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyD3tHwz8-6MBuj6b2EI3QMNuYwIP8AXfig", // Use direct value since it's public
-  authDomain: "pict-hackathon-2e532.firebaseapp.com",
-  projectId: "pict-hackathon-2e532",
-  storageBucket: "pict-hackathon-2e532.firebasestorage.app",
-  messagingSenderId: "123757817140",
-  appId: "1:123757817140:web:a9b6058a4984e32ba9c961",
-  measurementId: "G-604H7WZ957",
+  apiKey: "AIzaSyB7O6-5qiqGmed4y2jVwavqegQThTcI7NM",
+  authDomain: "healthcare-hackathon-0919.firebaseapp.com",
+  projectId: "healthcare-hackathon-0919",
+  storageBucket: "healthcare-hackathon-0919.firebasestorage.app",
+  messagingSenderId: "883502788512",
+  appId: "1:883502788512:web:021e36233c2d379cb13ec5",
+  measurementId: "G-83TQX930SP"
 };
 
 // Initialize Firebase
