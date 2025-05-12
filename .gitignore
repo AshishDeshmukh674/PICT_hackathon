@@ -35,4 +35,71 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Python virtual environments
+venv/
+.venv/
+env/
+ENV/
+ml_backend/venv/
+ml_backend/.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
+# Python cache and build
+*.egg-info/
+.eggs/
+dist/
+build/
+pip-wheel-metadata/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# VSCode settings
+.vscode/
+.history/
+
+# macOS system files
+.DS_Store
+
+# Logs
+*.log
+
+# Backup files
+*~
+*.bak
+*.swp
+
+# Coverage reports
+htmlcov/
+.coverage
+.tox/
+
+# Model files and large data
+*.h5
+*.pth
+*.pt
+*.ckpt
+*.onnx
+*.joblib
+*.pkl
+*.npz
+*.npy
+
+# FastAPI/uvicorn cache
+ml_backend/.mypy_cache/
+ml_backend/.pytest_cache/
+
+# Node.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Output
+/out/
+
+__pycache__/
+
+ml_models/**/__pycache__/
